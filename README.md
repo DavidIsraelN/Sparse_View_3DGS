@@ -1,7 +1,7 @@
-# A coarse-to-fine image warping approach using trust region optimization for orthoimage mosaicking
-Official Implementation for the "A coarse-to-fine image warping approach using trust region optimization for orthoimage mosaicking" paper.  
+# GAGS: Geometry Aware-Guided 3D Gaussian Splatting for High-Quality Rendering and Surface Reconstruction
+Official Implementation for the "GAGS: Geometry Aware-Guided 3D Gaussian Splatting for High-Quality Rendering and Surface Reconstruction" paper.  
 <p align="center">
-    🌐 <a href="https://yhccc.github.io/ImageWarpingUsingTrustRegion/" target="_blank">Project</a>
+    🌐 <a href="https://VerseWei.github.io/GAGS/" target="_blank">Project</a>
 </p>
 
 ___
