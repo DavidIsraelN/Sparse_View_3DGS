@@ -73,7 +73,6 @@
 
                   <div class="column has-text-centered">
                     <div class="publication-links">
-                         <!-- Arxiv PDF link -->
                       <span class="link-block">
                         <a href="https://arxiv.org/pdf/<ARXIV PAPER ID>.pdf" target="_blank"
                         class="external-link button is-normal is-rounded is-dark">
@@ -125,43 +124,54 @@
 </section>
 
 
-<!-- Teaser video-->
-<!-- <section class="hero teaser">
-  <div class="container is-max-desktop">
-    <div class="hero-body">
-      <video poster="" id="tree" autoplay controls muted loop height="100%"> -->
-        <!-- Your video here -->
-        <!-- <source src="static/videos/banner_video.mp4"
-        type="video/mp4">
-      </video>
+<section class="hero is-small">
+  <div class="hero-body">
+    <div class="container has-text-centered">
+      <img src="static/images/GraphicAbstract.jpg" alt="MY ALT TEXT" style="max-width: 100%; height: auto;">
       <h2 class="subtitle has-text-centered">
-        Aliquam vitae elit ullamcorper tellus egestas pellentesque. Ut lacus tellus, maximus vel lectus at, placerat pretium mi. Maecenas dignissim tincidunt vestibulum. Sed consequat hendrerit nisl ut maximus. 
+        A comparison of the surface reconstruction results of 2DGS, Gaussian Surfels, PGSR and our method is presented at the top left, with the rendered views at the bottom. This comparison is also quantified in the 2D plot on the right.
       </h2>
     </div>
   </div>
-</section> -->
-<!-- End teaser video -->
+</section>
 
-<section class="hero teaser">
+<!-- Paper abstract -->
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            3D Gaussian Splatting (3DGS) has been explored for surface reconstruction, however unstructured and discontinuous Gaussian point clouds lead to uneven surface reconstruction accuracy as well as frequent loss of Novel View Synthesis (NVS) quality. To address this problem, we propose a geometry aware-guided 3DGS, a promising novel framework that combines geometric prior regularization and consistency supervision to achieve high-quality rendering and surface reconstruction. Specifically, monocular depth, estimated by some recently proposed monocular depth estimation models, contain implicitly abundant valuable geometric cues, but scale ambiguity limits its application. Therefore we first propose a K-Nearest Neighbor (KNN)-based depth alignment framework that utilizes the full-domain gradient at monocular depth map to align to the sparse point cloud obtained during the Structure from Motion (SfM), which is employed for regularization to enhance geometric representation. Then a pseudo-mesh-based multi-view consistency module is introduced to fine-tune and guide the model to recover the accurate surface. Finally, a pixel-level isotropic gradient aware method guides the appropriate growth of the Gaussians to further improve the surface and rendering quality. Experiments on dozens of indoor, outdoor, and object-centered/non-object-centered datasets demonstrate that our method achieves accurate surface reconstruction with excellent NVS performance.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End paper abstract -->
+
+<section class="hero teaser mipnerf">
   <style>
-    .video-grid {
+    .video-section .video-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 1rem;
       position: relative;
     }
 
-    .video-item {
+    .video-section .video-item {
       position: relative;
     }
 
-    .video-item video {
+    .video-section .video-item video {
       width: 100%;
       height: auto;
       object-fit: cover;
     }
 
-    .video-label {
+    .video-section .video-label {
       position: absolute;
       top: 8px;
       left: 8px;
@@ -173,7 +183,7 @@
       pointer-events: none; /* 不影响视频点击 */
     }
   </style>
-  <div class="container is-max-desktop">
+  <div class="container is-max-desktop video-section">
     <div class="hero-body">
       <div class="video-grid">
         <div class="video-item">
@@ -212,149 +222,418 @@
             <source src="static/videos/bicycle_ours.mp4" type="video/mp4">
           </video>
         </div>
-      <!-- </div>
-      <h2 class="subtitle has-text-centered">
-        Aliquam vitae elit ullamcorper tellus egestas pellentesque. Ut lacus tellus, maximus vel lectus at, placerat pretium mi. Maecenas dignissim tincidunt vestibulum. Sed consequat hendrerit nisl ut maximus.
-      </h2>
-    </div> -->
+      </div>
+    </div>
   </div>
 </section>
 
 
-<!-- Paper abstract -->
-<section class="section hero is-light">
+<section class="hero teaser tnt">
+  <h2 class="title is-3 has-text-centered">Tank and Temples</h2>
+  <style>
+    .carousel-container {
+      position: relative;
+      max-width: 1000px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+
+    .carousel-track {
+      display: flex;
+      transition: transform 0.1s ease;
+    }
+
+    .video-group {
+      display: flex;
+      flex: 0 0 100%;
+      justify-content: space-around;
+    }
+
+    .carousel-container .video-item {
+      width: 32%;
+      position: relative;
+    }
+
+    .carousel-container .video-item video {
+      width: 100%;
+      height: auto;
+      object-fit: cover;
+    }
+
+    .carousel-container .video-label {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      padding: 2px 6px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    .carousel-buttons {
+      text-align: center;
+      margin-top: 1rem;
+    }
+
+    .carousel-buttons button {
+      background-color: #3273dc;
+      border: none;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .carousel-buttons button:hover {
+      background-color: #2759a4;
+    }
+
+    .prev-button {
+      position: relative;
+      left: -10px;
+    }
+
+    .next-button {
+      position: relative;
+      right: -10px;
+    }
+
+    .prev-button::before, .next-button::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      transform: translate(-50%, -50%);
+    }
+
+    .prev-button::before {
+      border-width: 10px 15px 10px 0;
+      border-color: transparent #fff transparent transparent;
+    }
+
+    .next-button::before {
+      border-width: 10px 0 10px 15px;
+      border-color: transparent transparent transparent #fff;
+    }
+
+    .carousel-buttons button:hover {
+      background: #2759a4;
+    }
+  </style>
+
   <div class="container is-max-desktop">
-    <div class="columns is-centered has-text-centered">
-      <div class="column is-four-fifths">
-        <h2 class="title is-3">Abstract</h2>
-        <div class="content has-text-justified">
-          <p>
-            3D Gaussian Splatting (3DGS) has been explored for surface reconstruction, however unstructured and discontinuous Gaussian point clouds lead to uneven surface reconstruction accuracy as well as frequent loss of Novel View Synthesis (NVS) quality. To address this problem, we propose a geometry aware-guided 3DGS, a promising novel framework that combines geometric prior regularization and consistency supervision to achieve high-quality rendering and surface reconstruction. Specifically, monocular depth, estimated by some recently proposed monocular depth estimation models, contain implicitly abundant valuable geometric cues, but scale ambiguity limits its application. Therefore we first propose a K-Nearest Neighbor (KNN)-based depth alignment framework that utilizes the full-domain gradient at monocular depth map to align to the sparse point cloud obtained during the Structure from Motion (SfM), which is employed for regularization to enhance geometric representation. Then a pseudo-mesh-based multi-view consistency module is introduced to fine-tune and guide the model to recover the accurate surface. Finally, a pixel-level isotropic gradient aware method guides the appropriate growth of the Gaussians to further improve the surface and rendering quality. Experiments on dozens of indoor, outdoor, and object-centered/non-object-centered datasets demonstrate that our method achieves accurate surface reconstruction with excellent NVS performance.
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-<!-- End paper abstract -->
+    <div class="hero-body">
+      <div class="carousel-container">
+        <div class="carousel-track" id="carousel-track">
 
-<section class="hero is-small">
-  <div class="hero-body">
-    <div class="container has-text-centered">
-      <img src="static/images/GraphicAbstract.jpg" alt="MY ALT TEXT" style="max-width: 100%; height: auto;">
-      <h2 class="subtitle has-text-centered">
-        A comparison of the surface reconstruction results of 2DGS, Gaussian Surfels, PGSR and our method is presented at the top left, with the rendered views at the bottom. This comparison is also quantified in the 2D plot on the right.
-      </h2>
-    </div>
-  </div>
-</section>
-
-
-<!-- Image carousel -->
-<!-- <section class="hero is-small">
-  <div class="hero-body">
-    <div class="container">
-      <div id="results-carousel" class="carousel results-carousel">
-       <div class="item">
-        <img src="static/images/GraphicAbstract.jpg" alt="MY ALT TEXT"/>
-        <h2 class="subtitle has-text-centered">
-          First image description.
-        </h2>
-      </div>
-      <div class="item">
-        <img src="static/images/carousel2.jpg" alt="MY ALT TEXT"/>
-        <h2 class="subtitle has-text-centered">
-          Second image description.
-        </h2>
-      </div>
-      <div class="item">
-        <img src="static/images/carousel3.jpg" alt="MY ALT TEXT"/>
-        <h2 class="subtitle has-text-centered">
-         Third image description.
-       </h2>
-     </div>
-     <div class="item">
-      <img src="static/images/carousel4.jpg" alt="MY ALT TEXT"/>
-      <h2 class="subtitle has-text-centered">
-        Fourth image description.
-      </h2>
-    </div>
-  </div>
-</div>
-</div>
-</section> -->
-<!-- End image carousel -->
-
-
-
-
-<!-- Youtube video -->
-<!-- <section class="hero is-small is-light">
-  <div class="hero-body">
-    <div class="container">
-      <h2 class="title is-3">Video Presentation</h2>
-      <div class="columns is-centered has-text-centered">
-        <div class="column is-four-fifths">
-          
-          <div class="publication-video">
-            <iframe src="https://www.youtube.com/embed/JkaxUblCGz0" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video autoplay controls muted loop>
+                <source src="static/videos/Auditorium_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video autoplay controls muted loop>
+                <source src="static/videos/Auditorium_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video autoplay controls muted loop>
+                <source src="static/videos/Auditorium_normal.mp4" type="video/mp4">
+              </video>
+            </div>
           </div>
+
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video autoplay controls muted loop>
+                <source src="static/videos/Ballroom_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video autoplay controls muted loop>
+                <source src="static/videos/Ballroom_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video autoplay controls muted loop>
+                <source src="static/videos/Ballroom_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+          
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Barn_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Barn_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Barn_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+          
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Church_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Church_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Church_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+          
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Courtroom_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Courtroom_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Courtroom_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+          
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Family_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Family_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Family_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+          
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Horse_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Horse_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Horse_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+          
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Train_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Train_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Train_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+          
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Truck_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Truck_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Truck_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Playground_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Playground_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Playground_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Ignatius_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Ignatius_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Ignatius_render.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/M60_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/M60_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/M60_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+
+          <div class="video-group">
+            <div class="video-item">
+              <div class="video-label">Render</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Francis_render.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Depth</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Francis_depth.mp4" type="video/mp4">
+              </video>
+            </div>
+            <div class="video-item">
+              <div class="video-label">Normal</div>
+              <video poster="" autoplay controls muted loop>
+                <source src="static/videos/Francis_normal.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+
         </div>
+      </div>
+
+      <div class="carousel-buttons">
+        <button onclick="moveSlide(-1)" class="prev-button"></button>
+        <button onclick="moveSlide(1)" class="next-button"></button>
       </div>
     </div>
   </div>
-</section> -->
-<!-- End youtube video -->
 
+  <script>
+    const track = document.getElementById('carousel-track');
+    let currentIndex = 0;
+    const groups = document.querySelectorAll('.video-group');
+    const totalGroups = groups.length;
 
-<!-- Video carousel -->
-<!-- <section class="hero is-small">
-  <div class="hero-body">
-    <div class="container">
-      <h2 class="title is-3">Another Carousel</h2>
-      <div id="results-carousel" class="carousel results-carousel">
-        <div class="item item-video1">
-          <video poster="" id="video1" autoplay controls muted loop height="100%">
-            <source src="static/videos/carousel1.mp4"
-            type="video/mp4">
-          </video>
-        </div>
-        <div class="item item-video2">
-          <video poster="" id="video2" autoplay controls muted loop height="100%">
-            <source src="static/videos/carousel2.mp4"
-            type="video/mp4">
-          </video>
-        </div>
-        <div class="item item-video3">
-          <video poster="" id="video3" autoplay controls muted loop height="100%">\
-            <source src="static/videos/carousel3.mp4"
-            type="video/mp4">
-          </video>
-        </div>
-      </div>
-    </div>
-  </div>
-</section> -->
-<!-- End video carousel -->
-
-
-
-
-
-
-<!-- Paper poster -->
-<!-- <section class="hero is-small is-light">
-  <div class="hero-body">
-    <div class="container">
-      <h2 class="title">Poster</h2>
-
-      <iframe  src="static/pdfs/sample.pdf" width="100%" height="550">
-          </iframe>
-        
-      </div>
-    </div>
-  </section> -->
-<!--End paper poster -->
+    function moveSlide(direction) {
+      currentIndex += direction;
+      if (currentIndex < 0) {
+        currentIndex = totalGroups - 1; // 回到最后一组
+      } else if (currentIndex >= totalGroups) {
+        currentIndex = 0; // 回到第一组
+      }
+      const translateX = -currentIndex * 100;
+      track.style.transform = `translateX(${translateX}%)`;
+    }
+  </script>
+</section>
 
 
 <!--BibTex citation -->
