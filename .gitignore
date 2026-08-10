@@ -1,8 +1,11 @@
 # My additions
+cuda-keyring_1.1-1_all.deb
 /docs/static/mipnerf360_videos
 /docs/static/ours_videos
 /docs/static/pgsr_videos
 /preprocessing/depth_estimation/weights
+/submodules/simple-knn/simple_knn.egg-info
+/data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
