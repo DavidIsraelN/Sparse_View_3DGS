@@ -1,0 +1,126 @@
+usage: train.py [-h] [--sh_degree SH_DEGREE] [--source_path SOURCE_PATH]
+                [--model_path MODEL_PATH] [--images IMAGES]
+                [--resolution RESOLUTION] [--white_background]
+                [--data_device DATA_DEVICE] [--eval] [--preload_img]
+                [--multi_view_num_filter MULTI_VIEW_NUM_FILTER]
+                [--multi_view_num_ncc MULTI_VIEW_NUM_NCC]
+                [--multi_view_max_angle MULTI_VIEW_MAX_ANGLE]
+                [--multi_view_min_dis MULTI_VIEW_MIN_DIS]
+                [--multi_view_max_dis MULTI_VIEW_MAX_DIS]
+                [--use_mask USE_MASK] [--create_mask] [--aligned_depth]
+                [--comput_pmap] [--save_color_pmaps] [--skybox]
+                [--skybox_points SKYBOX_POINTS] [--mask_type MASK_TYPE]
+                [--scene_opac] [--depth_converter] [--contrib_densify]
+                [--patch_size PATCH_SIZE] [--sample_num SAMPLE_NUM]
+                [--prior_depth] [--prior_normal] [--smooth] [--warp]
+                [--iterations ITERATIONS]
+                [--position_lr_init POSITION_LR_INIT]
+                [--position_lr_final POSITION_LR_FINAL]
+                [--position_lr_delay_mult POSITION_LR_DELAY_MULT]
+                [--position_lr_max_steps POSITION_LR_MAX_STEPS]
+                [--feature_lr FEATURE_LR] [--opacity_lr OPACITY_LR]
+                [--scaling_lr SCALING_LR] [--rotation_lr ROTATION_LR]
+                [--percent_dense PERCENT_DENSE] [--lambda_dssim LAMBDA_DSSIM]
+                [--densification_interval DENSIFICATION_INTERVAL]
+                [--opacity_reset_interval OPACITY_RESET_INTERVAL]
+                [--densify_from_iter DENSIFY_FROM_ITER]
+                [--densify_until_iter DENSIFY_UNTIL_ITER]
+                [--densify_grad_threshold DENSIFY_GRAD_THRESHOLD]
+                [--depth_threshold DEPTH_THRESHOLD]
+                [--multi_view_weight_from_iter MULTI_VIEW_WEIGHT_FROM_ITER]
+                [--geom_prior_until_iter GEOM_PRIOR_UNTIL_ITER]
+                [--opacity_cull_threshold OPACITY_CULL_THRESHOLD]
+                [--max_all_points MAX_ALL_POINTS] [--random_background]
+                [--lambda_1 LAMBDA_1] [--lambda_2 LAMBDA_2]
+                [--lambda_3 LAMBDA_3] [--lambda_4 LAMBDA_4]
+                [--lambda_5 LAMBDA_5] [--lambda_6 LAMBDA_6]
+                [--convert_SHs_python] [--compute_cov3D_python] [--debug]
+                [--ip IP] [--port PORT] [--debug_from DEBUG_FROM]
+                [--detect_anomaly]
+                [--test_iterations TEST_ITERATIONS [TEST_ITERATIONS ...]]
+                [--save_iterations SAVE_ITERATIONS [SAVE_ITERATIONS ...]]
+                [--quiet]
+                [--checkpoint_iterations CHECKPOINT_ITERATIONS [CHECKPOINT_ITERATIONS ...]]
+                [--start_checkpoint START_CHECKPOINT]
+
+Training script parameters
+
+options:
+  -h, --help            show this help message and exit
+  --ip IP
+  --port PORT
+  --debug_from DEBUG_FROM
+  --detect_anomaly
+  --test_iterations TEST_ITERATIONS [TEST_ITERATIONS ...]
+  --save_iterations SAVE_ITERATIONS [SAVE_ITERATIONS ...]
+  --quiet
+  --checkpoint_iterations CHECKPOINT_ITERATIONS [CHECKPOINT_ITERATIONS ...]
+  --start_checkpoint START_CHECKPOINT
+
+Loading Parameters:
+  --sh_degree SH_DEGREE
+  --source_path SOURCE_PATH, -s SOURCE_PATH
+  --model_path MODEL_PATH, -m MODEL_PATH
+  --images IMAGES, -i IMAGES
+  --resolution RESOLUTION, -r RESOLUTION
+  --white_background, -w
+  --data_device DATA_DEVICE
+  --eval
+  --preload_img
+  --multi_view_num_filter MULTI_VIEW_NUM_FILTER
+  --multi_view_num_ncc MULTI_VIEW_NUM_NCC
+  --multi_view_max_angle MULTI_VIEW_MAX_ANGLE
+  --multi_view_min_dis MULTI_VIEW_MIN_DIS
+  --multi_view_max_dis MULTI_VIEW_MAX_DIS
+  --use_mask USE_MASK, -u USE_MASK
+  --create_mask
+  --aligned_depth
+  --comput_pmap
+  --save_color_pmaps
+  --skybox
+  --skybox_points SKYBOX_POINTS
+  --mask_type MASK_TYPE
+  --scene_opac
+  --depth_converter
+  --contrib_densify
+  --patch_size PATCH_SIZE
+  --sample_num SAMPLE_NUM
+  --prior_depth
+  --prior_normal
+  --smooth
+  --warp
+
+Optimization Parameters:
+  --iterations ITERATIONS
+  --position_lr_init POSITION_LR_INIT
+  --position_lr_final POSITION_LR_FINAL
+  --position_lr_delay_mult POSITION_LR_DELAY_MULT
+  --position_lr_max_steps POSITION_LR_MAX_STEPS
+  --feature_lr FEATURE_LR
+  --opacity_lr OPACITY_LR
+  --scaling_lr SCALING_LR
+  --rotation_lr ROTATION_LR
+  --percent_dense PERCENT_DENSE
+  --lambda_dssim LAMBDA_DSSIM
+  --densification_interval DENSIFICATION_INTERVAL
+  --opacity_reset_interval OPACITY_RESET_INTERVAL
+  --densify_from_iter DENSIFY_FROM_ITER
+  --densify_until_iter DENSIFY_UNTIL_ITER
+  --densify_grad_threshold DENSIFY_GRAD_THRESHOLD
+  --depth_threshold DEPTH_THRESHOLD
+  --multi_view_weight_from_iter MULTI_VIEW_WEIGHT_FROM_ITER
+  --geom_prior_until_iter GEOM_PRIOR_UNTIL_ITER
+  --opacity_cull_threshold OPACITY_CULL_THRESHOLD
+  --max_all_points MAX_ALL_POINTS
+  --random_background
+  --lambda_1 LAMBDA_1
+  --lambda_2 LAMBDA_2
+  --lambda_3 LAMBDA_3
+  --lambda_4 LAMBDA_4
+  --lambda_5 LAMBDA_5
+  --lambda_6 LAMBDA_6
+
+Pipeline Parameters:
+  --convert_SHs_python
+  --compute_cov3D_python
+  --debug

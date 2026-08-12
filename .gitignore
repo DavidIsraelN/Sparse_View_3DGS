@@ -6,6 +6,9 @@ cuda-keyring_1.1-1_all.deb
 /preprocessing/depth_estimation/weights
 /submodules/simple-knn/simple_knn.egg-info
 /data
+/output
+/Vanilla_3DGS/assets/*.gif
+/Vanilla_3DGS/git_beckup
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
