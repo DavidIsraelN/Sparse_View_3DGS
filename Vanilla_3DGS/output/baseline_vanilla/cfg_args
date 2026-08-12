@@ -1,0 +1,1 @@
+Namespace(sh_degree=3, source_path='/mnt/d/codes/study/masters/first_year/sms_b/DL_for_3D_CV/final_project/Sparse_View_3DGS/Vanilla_3DGS/data/bicycle', model_path='./output/baseline_vanilla', images='images', depths='', resolution=4, white_background=False, train_test_exp=False, data_device='cuda', eval=False)
