@@ -50,7 +50,7 @@ def generate_depth_priors(image_dir, output_dir, weights_path, model_size='vits'
             # 1. Save the exact mathematical tensor for 3DGS training
             # ---------------------------------------------------------
             depth_tensor = torch.from_numpy(depth_map).float()
-            tensor_path = os.path.join(tensor_dir, f"depth_{name_without_ext}.pt")
+            tensor_path = os.path.join(tensor_dir, f"depth{name_without_ext}.pt")
             torch.save(depth_tensor, tensor_path)
             
             # ---------------------------------------------------------

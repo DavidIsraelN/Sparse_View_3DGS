@@ -25,6 +25,14 @@ except ImportError:
 import time
 import torch.nn.functional as F
 
+# -------------------------------------------------------------------
+# RESEARCH ABLATION FLAG - My Addition - David Naki
+# Set to False to strictly disable prior normal loss for the ablation 
+# study. This isolates the effect of the depth alignment loss and 
+# solves the scale/shift ambiguity without confounding variables.
+# -------------------------------------------------------------------
+USE_PRIOR_NORMAL = False
+
 def setup_seed(seed):
      torch.manual_seed(seed)
      torch.cuda.manual_seed_all(seed)
@@ -82,6 +90,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         viewpoint_cam = train_viewpoint_stack.pop(randint(0, len(train_viewpoint_stack)-1))
 
         # Pick a nearest camera
+        # MODIFIED: Initialize variable to prevent UnboundLocalError.
+        nearest_cam = None  
         if iteration > opt.multi_view_weight_from_iter and len(viewpoint_cam.nearest_names_ncc) > 0:
             nearest_name = random.sample(viewpoint_cam.nearest_names_ncc, 1)
             nearest_cam = [cam for cam in scene.getTrainCameras() if cam.image_name == nearest_name[0]]
@@ -94,7 +104,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
-        if iteration > opt.multi_view_weight_from_iter and args.warp:
+        # MODIFIED: Added 'nearest_cam is not None' check.
+        # In extreme sparse-view setups (e.g., 3-4 views), the NCC nearest camera list may be empty.
+        # This safely prevents an UnboundLocalError when attempting to render with a missing neighbor.
+        if iteration > opt.multi_view_weight_from_iter and args.warp and nearest_cam is not None:
             render_pkg = render(viewpoint_cam, gaussians, pipe, bg, contrib_densify=contrib_densify, depth_threshold=opt.depth_threshold*scene.cameras_extent, \
                                  nearest_camera=nearest_cam, use_mask=use_mask, convert_depth=True)
         else:
@@ -120,7 +133,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             geom_prior_mask = torch.ones_like(depth.detach()).to(dataset.data_device)
 
         # smooth loss
-        if dataset.smooth and iteration > 7000:
+        # MODIFIED: Added USE_PRIOR_NORMAL check because smooth loss relies on monoN
+        if dataset.smooth and iteration > 7000 and USE_PRIOR_NORMAL:
             curv_nm = normal2curv(monoN, mask_gt)
             image_weight = (1 - curv_nm.clamp(0,1).detach()) ** 2
             loss_surface = (geom_prior_mask * image_weight * mask_gt * ((depth_normal - normal).abs().sum(0))).mean()             
@@ -132,7 +146,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             loss += opt.lambda_6 * loss_opac
 
         # prior normal loss
-        if iteration < opt.geom_prior_until_iter and dataset.prior_normal:
+        # MODIFIED: Added USE_PRIOR_NORMAL flag to strictly enforce our ablation setup
+        if iteration < opt.geom_prior_until_iter and dataset.prior_normal and USE_PRIOR_NORMAL:
             monoN = viewpoint_cam.get_mono(use_mask)[:3]
             consist_weight = torch.exp(-((1 - torch.sum(normal.detach() * monoN, dim=0, keepdim=True)) ** 2) / (0.5 ** 2))
             loss_monoN = cos_loss(normal, monoN, weight=mask_gt*geom_prior_mask*consist_weight)                  
@@ -177,7 +192,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             cv2.imwrite(os.path.join(debug_path, "%05d"%iteration + "_" + viewpoint_cam.image_name + ".jpg"), image_to_show)
 
         # multi-view loss
-        if iteration > opt.multi_view_weight_from_iter and dataset.warp:
+        # MODIFIED: Added 'nearest_cam is not None' to safely bypass multi-view consistency.
+        # Warping depth between cameras with an extremely wide baseline causes severe occlusion errors, 
+        # so we disable this regularization when no valid neighbor exists.
+        if iteration > opt.multi_view_weight_from_iter and dataset.warp and nearest_cam is not None:
             projected_depthmap, projected_normalmap = render_pkg["projected_depthmap"], render_pkg["projected_normalmap"]
             projected_mask = (projected_depthmap != 0)
             depth_noise = torch.zeros_like(projected_depthmap, device=dataset.data_device)
