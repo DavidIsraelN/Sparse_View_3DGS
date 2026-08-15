@@ -1,6 +1,15 @@
 import struct
 import os
 import glob
+import shutil
+import sys
+from pathlib import Path
+# Adds the main folder (Sparse_View_3DGS) to Python's path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from project_config import (
+    ORIGINAL_IMAGES_DIR, ORIGINAL_SPARSE_DIR, 
+    COLMAP_IMAGES_DIR, COLMAP_SPARSE_DIR
+)
 
 
 def filter_images_bin(input_bin_path, output_bin_path, valid_image_names):
@@ -59,26 +68,37 @@ def filter_images_bin(input_bin_path, output_bin_path, valid_image_names):
 
 
 if __name__ == '__main__':
-    # 1. Define paths
-    # ===== change it for another images =====
-    sparse_folder = "./data/bicycle/sparse/0"
-    images_folder = "./data/bicycle/images"
+    # 1. Ensure the new colmap workspace directories exist
+    os.makedirs(COLMAP_IMAGES_DIR, exist_ok=True)
+    os.makedirs(COLMAP_SPARSE_DIR, exist_ok=True)
     
-    input_images_bin = os.path.join(sparse_folder, "images_original.bin")
-    output_images_bin = os.path.join(sparse_folder, "images.bin")
-    
-    # Backup the original images.bin before overwriting
-    original_bin = os.path.join(sparse_folder, "images.bin")
-    if os.path.exists(original_bin) and not os.path.exists(input_images_bin):
-        os.rename(original_bin, input_images_bin)
-        print(f"Backed up original images.bin to images_original.bin")
-    
-    # 2. Get the exact names of the 4 images you placed in the images folder
     valid_names = set()
-    for img_path in glob.glob(os.path.join(images_folder, "*")):
-        valid_names.add(os.path.basename(img_path))
-        
-    print(f"Found {len(valid_names)} target images in the images folder.")
     
-    # 3. Run the filter
-    filter_images_bin(input_images_bin, output_images_bin, valid_names)
+    # 2. Copy the target images to the workspace
+    print("Copying target images to the workspace...")
+    for img_path in glob.glob(os.path.join(ORIGINAL_IMAGES_DIR, "*")):
+        img_name = os.path.basename(img_path)
+        valid_names.add(img_name)
+        dest_path = os.path.join(COLMAP_IMAGES_DIR, img_name)
+        if not os.path.exists(dest_path):
+            shutil.copy(img_path, dest_path)
+            
+    print(f"Found and copied {len(valid_names)} target images.")
+    
+    # 3. Copy the unmodified COLMAP binaries to the workspace
+    print("Copying cameras.bin and points3D.bin to the workspace...")
+    for bin_file in ["cameras.bin", "points3D.bin"]:
+        src = os.path.join(ORIGINAL_SPARSE_DIR, bin_file)
+        dst = os.path.join(COLMAP_SPARSE_DIR, bin_file)
+        if os.path.exists(src):
+            shutil.copy(src, dst)
+    
+    # 4. Filter images.bin and save directly to the workspace
+    # We read from the original directory and write to the colmap directory.
+    input_images_bin = os.path.join(ORIGINAL_SPARSE_DIR, "images.bin")
+    output_images_bin = os.path.join(COLMAP_SPARSE_DIR, "images.bin")
+    
+    if os.path.exists(input_images_bin):
+        filter_images_bin(input_images_bin, output_images_bin, valid_names)
+    else:
+        print(f"Error: Original images.bin not found at {input_images_bin}")
