@@ -25,16 +25,13 @@ except ImportError:
 import time
 import torch.nn.functional as F
 
-
 # -------------------------------------------------------------------
-# RESEARCH ABLATION FLAGS - My Addition - David Naki
-# -------------------------------------------------------------------
+# RESEARCH ABLATION FLAG - My Addition - David Naki
 # Set to False to strictly disable prior normal loss for the ablation 
 # study. This isolates the effect of the depth alignment loss and 
 # solves the scale/shift ambiguity without confounding variables.
-USE_PRIOR_NORMAL = False
 # -------------------------------------------------------------------
-
+USE_PRIOR_NORMAL = False
 
 def setup_seed(seed):
      torch.manual_seed(seed)
@@ -43,92 +40,6 @@ def setup_seed(seed):
      random.seed(seed)
      torch.backends.cudnn.deterministic = True
 setup_seed(22)
-
-def get_image_gradients(image):
-    """
-    Computes the spatial gradients (dx, dy) of a depth map.
-    This effectively captures the slope/curvature of the surface.
-    
-    Args:
-        image (Tensor): Depth map of shape (1, H, W)
-    Returns:
-        dx, dy (Tensors): Spatial gradients along x and y axes.
-    """
-    # Finite differences to calculate gradients
-    dx = image[..., :, 1:] - image[..., :, :-1]
-    dy = image[..., 1:, :] - image[..., :-1, :]
-    return dx, dy
-
-def gradient_alignment_loss(pred_depth, prior_depth, mask=None):
-    """
-    Calculates the Gradient-Alignment Loss (GAL) between rendered and prior depths
-    using Z-score normalization. 
-    Returns the scalar loss and the X-gradients for debug visualization.
-    """
-    # 1. Z-score normalization ONLY on valid pixels to prevent zero-skew 
-    # (Solves scale/shift ambiguity)
-    if mask is not None:
-        valid_pred = pred_depth[mask]
-        valid_prior = prior_depth[mask]
-        if valid_pred.numel() > 0:
-            pred_norm = (pred_depth - valid_pred.mean()) / (valid_pred.std() + 1e-8)
-            prior_norm = (prior_depth - valid_prior.mean()) / (valid_prior.std() + 1e-8)
-        else:
-            pred_norm, prior_norm = pred_depth, prior_depth
-    else:
-        pred_norm = (pred_depth - pred_depth.mean()) / (pred_depth.std() + 1e-8)
-        prior_norm = (prior_depth - prior_depth.mean()) / (prior_depth.std() + 1e-8)
-    
-    # 2. Compute spatial gradients on the continuous images
-    pred_dx, pred_dy = get_image_gradients(pred_norm)
-    prior_dx, prior_dy = get_image_gradients(prior_norm)
-    
-    # 3. L1 distance between gradients - Apply mask strictly to the computed gradients
-    if mask is not None:
-        # Shift mask to match the dimensions of the gradients
-        mask_dx = mask[..., :, 1:] & mask[..., :, :-1]
-        mask_dy = mask[..., 1:, :] & mask[..., :-1, :]
-        
-        loss_dx = torch.abs(pred_dx - prior_dx)[mask_dx].mean()
-        loss_dy = torch.abs(pred_dy - prior_dy)[mask_dy].mean()
-        
-        # Mask visualization outputs so they look clean
-        pred_dx_vis = (pred_dx * mask_dx).detach()
-        prior_dx_vis = (prior_dx * mask_dx).detach()
-    else:
-        loss_dx = torch.abs(pred_dx - prior_dx).mean()
-        loss_dy = torch.abs(pred_dy - prior_dy).mean()
-        pred_dx_vis = pred_dx.detach()
-        prior_dx_vis = prior_dx.detach()
-    
-    # Return the total loss and the X-axis gradients for visualization
-    return loss_dx + loss_dy, pred_dx_vis, prior_dx_vis
-
-# def gradient_alignment_loss(pred_depth, prior_depth, mask=None):
-#     """
-#     Calculates the Gradient-Alignment Loss (GAL) between rendered and prior depths
-#     using Z-score normalization. 
-#     Returns the scalar loss and the X-gradients for debug visualization.
-#     """
-#     # Apply mask if provided (Selective part)
-#     if mask is not None:
-#         pred_depth = pred_depth * mask
-#         prior_depth = prior_depth * mask
-
-#     # 1. Z-score normalization (Solves scale/shift ambiguity)
-#     pred_norm = (pred_depth - pred_depth.mean()) / (pred_depth.std() + 1e-8)
-#     prior_norm = (prior_depth - prior_depth.mean()) / (prior_depth.std() + 1e-8)
-    
-#     # 2. Compute spatial gradients
-#     pred_dx, pred_dy = get_image_gradients(pred_norm)
-#     prior_dx, prior_dy = get_image_gradients(prior_norm)
-    
-#     # 3. L1 distance between gradients
-#     loss_dx = torch.abs(pred_dx - prior_dx).mean()
-#     loss_dy = torch.abs(pred_dy - prior_dy).mean()
-    
-#     # Return the total loss and the X-axis gradients for visualization
-#     return loss_dx + loss_dy, pred_dx, prior_dx
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
@@ -245,33 +156,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             loss_curv = l1_loss(curv_nr, curv_nm, mask_gt*geom_prior_mask*consist_weight)
             loss += opt.lambda_3 * (0.02 * (2 - (iteration / opt.geom_prior_until_iter)) * loss_monoN + 0.002 * loss_curv)
 
-        # Initialize GAL variables for debug block
-        pred_dx_vis, prior_dx_vis = None, None
-
-        # prior depth loss (SMDGS vs. Our GAL)
-        # MODIFIED: Added our loss algorithm (GAL), and used it as a dependency on the USE_GAL flag
+        # prior depth loss
         if dataset.aligned_depth and iteration < opt.geom_prior_until_iter and dataset.prior_depth:       
             alignedD = viewpoint_cam.get_alignedD(use_mask)
-            consist_mask = viewpoint_cam.get_pmaps(use_mask)
-
-            # Use geom_prior_mask to focus on valid foreground geometry
-            valid_mask = consist_mask.to(torch.bool) & geom_prior_mask.to(torch.bool)
-            
-            if dataset.use_gal:
-                # Our proposed Selective Gradient-Alignment Loss
-                # We apply the valid_mask to ensure "Selective" processing
-                loss_gal, pred_dx, prior_dx = gradient_alignment_loss(depth, alignedD, mask=valid_mask)
-                loss += opt.lambda_2 * loss_gal
-                
-                # Store for debug visualization (detached from computation graph)
-                pred_dx_vis = pred_dx.detach()
-                prior_dx_vis = prior_dx.detach()
-            else:
-                # Original SMDGS Absolute Depth Loss
-                depth_err = torch.abs((alignedD - depth) / (alignedD + depth + 1e-8))
-                depth_weight = (1.0 / torch.exp(100 * depth_err)).detach()
-                LalignedD = (depth_weight * torch.abs(alignedD - depth))[valid_mask].mean()
-                loss += opt.lambda_2 * (1 / scene.cameras_extent) * LalignedD
+            consist_mask = viewpoint_cam.get_pmaps(use_mask)            
+            depth_err = torch.abs((alignedD - depth) / (alignedD + depth + 1e-8))
+            depth_weight = (1.0 / torch.exp(100 * depth_err)).detach()
+            LalignedD = (depth_weight * torch.abs(alignedD - depth))[consist_mask.to(torch.bool) & geom_prior_mask.to(torch.bool)].mean()
+            loss += opt.lambda_2 * (1 / scene.cameras_extent) * LalignedD
 
         # scale loss
         if visibility_filter.sum() > 0:
@@ -297,32 +189,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             row0 = np.concatenate([gt_img_show, img_show, depth_color], axis=1)                      # debug      gt_img   rendered_img   rendered_depth  
             row1 = np.concatenate([mono_normal_show, normal_show, depth_normal_show], axis=1)        #            mono_normal  rendered_normal depth_normal
             image_to_show = np.concatenate([row0, row1], axis=0)
-
-            # MODIFIED: Add Debug Visualization for GAL Gradients
-            if dataset.use_gal and pred_dx_vis is not None:
-                def norm_grad_to_colormap(g, target_shape):
-                    """Normalizes gradient tensor to 0-255 uint8 and applies colormap."""
-                    g_np = g.squeeze().cpu().numpy()
-                    g_np = (g_np - g_np.min()) / (g_np.max() - g_np.min() + 1e-8)
-                    g_img = (g_np * 255).astype(np.uint8)
-                    # Resize to match the standard image shape since gradients lose 1 pixel
-                    return cv2.resize(g_img, target_shape)
-                
-                # Use target shape (Width, Height) from the ground truth image
-                target_shape = (gt_img_show.shape[1], gt_img_show.shape[0])
-                
-                # Apply Viridis colormap to visualize slopes
-                pred_dx_color = cv2.applyColorMap(norm_grad_to_colormap(pred_dx_vis, target_shape), cv2.COLORMAP_VIRIDIS)
-                prior_dx_color = cv2.applyColorMap(norm_grad_to_colormap(prior_dx_vis, target_shape), cv2.COLORMAP_VIRIDIS)
-                
-                # Create a black placeholder for the 3rd column to maintain the 3-column grid structure
-                placeholder = np.zeros_like(gt_img_show)
-                
-                # Concatenate row and add to the main image
-                # Format: [Rendered Gradient] | [Monocular Gradient (Target)] | [Empty]
-                grad_row = np.concatenate([pred_dx_color, prior_dx_color, placeholder], axis=1)
-                image_to_show = np.concatenate([image_to_show, grad_row], axis=0)
-
             cv2.imwrite(os.path.join(debug_path, "%05d"%iteration + "_" + viewpoint_cam.image_name + ".jpg"), image_to_show)
 
         # multi-view loss
@@ -585,22 +451,3 @@ if __name__ == "__main__":
     print(f"Used Time: {(t1 - t0) / 60} mins.")
     # All done
     print("\nTraining complete.")
-
-
-
-
-
-# # --- תוספת הויזואליזציה שלנו למפות הנגזרות ---
-#             if dataset.use_gal and debug_pred_dx is not None:
-#                 # פונקציית עזר להמרת טנזור לתמונה 0-255
-#                 def tensor_to_img(t):
-#                     t_np = t.squeeze().detach().cpu().numpy()
-#                     t_np = (t_np - t_np.min()) / (t_np.max() - t_np.min() + 1e-8)
-#                     return cv2.applyColorMap((t_np * 255).astype(np.uint8), cv2.COLORMAP_MAGMA)
-                
-#                 pred_dx_img = tensor_to_img(debug_pred_dx)
-#                 prior_dx_img = tensor_to_img(debug_prior_dx)
-                
-#                 # שרשור התמונות החדשות זו לצד זו ושמירתן
-#                 grad_show = np.concatenate([prior_dx_img, pred_dx_img], axis=1)
-#                 cv2.imwrite(os.path.join(debug_path, "%05d"%iteration + "_" + viewpoint_cam.image_name + "_gradients.jpg"), grad_show)

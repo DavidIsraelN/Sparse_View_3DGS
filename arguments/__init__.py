@@ -78,6 +78,10 @@ class ModelParams(ParamGroup):
         self.smooth = True
         self.warp = True
 
+        # --- ADDED: GAL Flag ---
+        # Determines whether to use the original SMDGS absolute alignment or our GAL
+        self.use_gal = False
+
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):

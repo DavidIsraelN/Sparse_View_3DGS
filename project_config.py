@@ -57,7 +57,7 @@ ALIGNED_DEPTH_DIR = os.path.join(SCENE_DIR, "output", "local_aligned")
 OUTPUT_BASE_DIR = os.path.join(PROJECT_ROOT, "output")
 VANILLA_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "baseline_vanilla")
 SMDGS_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "baseline_smdgs")
-OUR_METHOD_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "selective_gradient_loss")
+OUR_METHOD_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "selective_GAL_loss")
 
 # =========================================================
 # 4. Training Hyperparameters
@@ -76,9 +76,9 @@ def ensure_directories():
     """
     Utility function to verify that required output directories exist.
     """
-    # os.makedirs(VANILLA_OUT_DIR, exist_ok=True)
-    # os.makedirs(SMDGS_OUT_DIR, exist_ok=True)
-    # os.makedirs(OUR_METHOD_OUT_DIR, exist_ok=True)
+    os.makedirs(VANILLA_OUT_DIR, exist_ok=True)
+    os.makedirs(SMDGS_OUT_DIR, exist_ok=True)
+    os.makedirs(OUR_METHOD_OUT_DIR, exist_ok=True)
     
     # Ensure COLMAP workspace directories exist
     os.makedirs(COLMAP_IMAGES_DIR, exist_ok=True)
