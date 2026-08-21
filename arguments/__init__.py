@@ -123,6 +123,10 @@ class OptimizationParams(ParamGroup):
         self.random_background = False
 
         self.lambda_1 = 100.0
+        # MODIFIED: lambda_2 is the coefficient of the Absolute Depth Loss (original SMDGS loss)
+        # and was 1.0, this wheight not work well for and the Selective Gradient-Alignment Loss 
+        # (our loss), so i try to change it to 50.0, 10.0 and 4.0 to give this loss more wheight.
+        # but all of these tries didn't succeed, the gradients fits but the depth was very wrong.
         self.lambda_2 = 1.0
         self.lambda_3 = 1.0
         self.lambda_4 = 0.015
