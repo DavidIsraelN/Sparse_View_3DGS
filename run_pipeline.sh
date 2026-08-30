@@ -77,18 +77,18 @@ python train.py \
     --model_path $SMDGS_OUT
 
 # ---------------------------------------------------------
-# Step 6: Train Our Proposed Model (Selective GAL)
+# Step 6: Train Our Proposed Model (Selective LPC loss)
 # ---------------------------------------------------------
 echo -e "\n---> [Step 6/6] "
-echo -e "Starting Proposed Method (Selective Gradient-Alignment Loss) Training..."
+echo -e "Starting Proposed Method (Selective ---lpc Loss) Training..."
 
-# Execute the training script with the --use_gal flag to activate our custom loss
+# Execute the training script with the --use_lpc flag to activate our custom loss
 python train.py \
     -s $SCENE_DIR \
     --resolution $RESOLUTION \
     --iterations $ITERATIONS \
     --model_path $OUR_METHOD_OUT \
-    --use_gal
+    --use_lpc
 
 echo -e "\n========================================================="
 echo "Pipeline completed successfully!"

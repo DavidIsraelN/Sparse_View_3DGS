@@ -24,7 +24,7 @@ from gaussian_renderer import GaussianModel
 import numpy as np
 import cv2
 import open3d as o3d
-from scene.app_model import AppModel
+# from scene.app_model import AppModel
 import copy
 from collections import deque
 import shutil
@@ -85,7 +85,7 @@ def render_set(source_path, model_path, name, iteration, views, scene, gaussians
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         gt, _ = view.get_image(background, use_mask)
         mask_gt = view.get_gtMask(use_mask)
-        out = render(view, gaussians, pipeline, background, app_model=app_model)
+        out = render(view, gaussians, pipeline, background)
         rendering = out["render"].clamp(0.0, 1.0)
         _, H, W = rendering.shape
         

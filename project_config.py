@@ -57,7 +57,7 @@ ALIGNED_DEPTH_DIR = os.path.join(SCENE_DIR, "output", "local_aligned")
 OUTPUT_BASE_DIR = os.path.join(PROJECT_ROOT, "output")
 VANILLA_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "baseline_vanilla")
 SMDGS_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "baseline_smdgs")
-OUR_METHOD_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "selective_GAL_loss")
+OUR_METHOD_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "selective_LPC_Hybrid_loss")
 
 # =========================================================
 # 4. Training Hyperparameters

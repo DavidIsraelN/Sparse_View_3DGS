@@ -46,6 +46,8 @@ setup_seed(22)
 
 def patch_pearson_correlation_loss(pred_depth, prior_depth, mask=None, patch_size=11, stride=4):
     """
+    Memory-efficient and 100% Numerically Stable Local Pearson Correlation Loss.
+
     Computes the Local Pearson Correlation Loss between rendered and prior depth maps.
     This provides scale and shift invariance locally, forcing structural alignment
     without causing global variance explosion.
@@ -61,7 +63,7 @@ def patch_pearson_correlation_loss(pred_depth, prior_depth, mask=None, patch_siz
         loss (Tensor): The computed scalar loss (between 0 and 1).
         vis_map (Tensor): A heatmap-ready tensor showing correlation per patch.
     """
-    # Ensure inputs have shape (1, 1, H, W) for unfold
+    # Ensure inputs have shape (1, 1, H, W)
     if pred_depth.dim() == 3:
         pred_depth = pred_depth.unsqueeze(0)
     if prior_depth.dim() == 3:
@@ -71,138 +73,152 @@ def patch_pearson_correlation_loss(pred_depth, prior_depth, mask=None, patch_siz
     elif mask is None:
         mask = torch.ones_like(pred_depth)
 
-    # 1. Unfold images into patches of shape (1, patch_size*patch_size, Num_Patches)
-    pred_patches = F.unfold(pred_depth, kernel_size=patch_size, stride=stride)
-    prior_patches = F.unfold(prior_depth, kernel_size=patch_size, stride=stride)
-    mask_patches = F.unfold(mask, kernel_size=patch_size, stride=stride)
+    # Detach prior_depth to prevent PyTorch from building a computation graph for the constant target
+    prior_depth = prior_depth.detach()
 
-    # 2. Filter valid patches: Only keep patches where ALL pixels are within the valid mask
-    # A patch is fully valid if the sum of its mask values equals patch_size * patch_size
-    patch_area = patch_size * patch_size
-    valid_patch_mask = (mask_patches.sum(dim=1) == patch_area).squeeze() # Boolean array of length Num_Patches
-    
-    # If no patches are completely valid, return 0 loss safely
+    # 1. Identify fully valid patches
+    # If the average of the mask in a patch is 1.0, all pixels inside it are valid (mask == 1)
+    patch_validity = F.avg_pool2d(mask, kernel_size=patch_size, stride=stride)
+    valid_patch_mask = (patch_validity > 0.99) # Use > 0.99 instead of == 1.0 to survive Float32 precision drops
+
+    # If no patches are completely valid, safely return 0
     if not valid_patch_mask.any():
-        return torch.tensor(0.0, device=pred_depth.device, requires_grad=True), torch.zeros_like(pred_depth)
+        return torch.tensor(0.0, device=pred_depth.device, requires_grad=True), torch.zeros_like(pred_depth).squeeze()
 
-    # Keep only valid patches
-    valid_pred_patches = pred_patches[0, :, valid_patch_mask]   # (patch_area, N_valid)
-    valid_prior_patches = prior_patches[0, :, valid_patch_mask] # (patch_area, N_valid)
+    # 2. Compute local means via Average Pooling
+    mean_pred = F.avg_pool2d(pred_depth, kernel_size=patch_size, stride=stride)
+    mean_prior = F.avg_pool2d(prior_depth, kernel_size=patch_size, stride=stride)
 
-    # 3. Compute Pearson Correlation per patch
-    # E(X) and E(Y)
-    mean_pred = valid_pred_patches.mean(dim=0, keepdim=True)
-    mean_prior = valid_prior_patches.mean(dim=0, keepdim=True)
-    
-    # X - E(X) and Y - E(Y)
-    centered_pred = valid_pred_patches - mean_pred
-    centered_prior = valid_prior_patches - mean_prior
-    
-    # Covariance (numerator)
-    covar = (centered_pred * centered_prior).sum(dim=0)
-    
-    # Variances (denominator components)
-    var_pred = (centered_pred ** 2).sum(dim=0)
-    var_prior = (centered_prior ** 2).sum(dim=0)
-    
-    # Denominator with epsilon for numerical stability
+    # 3. Compute local mean of squares
+    mean_pred_sq = F.avg_pool2d(pred_depth ** 2, kernel_size=patch_size, stride=stride)
+    mean_prior_sq = F.avg_pool2d(prior_depth ** 2, kernel_size=patch_size, stride=stride)
+    mean_pred_prior = F.avg_pool2d(pred_depth * prior_depth, kernel_size=patch_size, stride=stride)
+
+    # 4. Compute variances and covariance
+    # Var(X) = E[X^2] - (E[X])^2
+    var_pred = mean_pred_sq - mean_pred ** 2
+    # Var(Y) = E[Y^2] - (E[Y])^2
+    var_prior = mean_prior_sq - mean_prior ** 2
+    # Cov(X,Y) = E[XY] - E[X]*E[Y]
+    covar = mean_pred_prior - mean_pred * mean_prior
+
+    # Clamp variances to prevent NaNs in sqrt
+    eps = 1e-5
+    var_pred = torch.clamp(var_pred, min=eps)
+    var_prior = torch.clamp(var_prior, min=eps)
+
+    # 5. Pearson Correlation coefficient
     denom = torch.sqrt(var_pred * var_prior) + 1e-8
-    
-    # Pearson r for each valid patch (Values between -1 and 1)
     pearson_r = covar / denom
-    
-    # 4. Final Loss: (1 - r) / 2 maps r=1 to loss=0, r=-1 to loss=1
-    loss_per_patch = (1.0 - pearson_r) / 2.0
+
+    # Clamp Pearson R strictly to [-1.0, 1.0]
+    # This completely eliminates "negative loss" explosions caused by catastrophic cancellation in Covariance
+    pearson_r = torch.clamp(pearson_r, min=-1.0, max=1.0)
+
+    # 6. Apply mask and compute final loss
+    valid_r = pearson_r[valid_patch_mask]
+    loss_per_patch = (1.0 - valid_r) / 2.0
     final_loss = loss_per_patch.mean()
 
-    # --- Prepare Visualization Map (Optional Debug Info) ---
-    # We create a 1D tensor of zeros for all patches, then fill the valid ones with their correlation
-    # We visualize 'pearson_r' directly to see where correlation is high (1) or low (<0)
-    # vis_patches = torch.zeros(1, 1, mask_patches.shape[2], device=pred_depth.device)
-    vis_patches = torch.zeros(1, patch_area, mask_patches.shape[2], device=pred_depth.device)
-    # vis_patches[0, 0, valid_patch_mask] = pearson_r.detach()
-    vis_patches[0, :, valid_patch_mask] = pearson_r.detach().unsqueeze(0)
+    # --- Prepare Visualization Map (Fixed Shape Bug) ---
+    # We build the map using mask multiplication instead of boolean indexing to avoid shape mismatch
+    vis_patches = pearson_r.detach() * valid_patch_mask.float()
+    
+    # Instead of F.fold (which is heavy), we interpolate the small feature map back to original image size
+    # This is standard practice in feature visualization and costs almost zero VRAM
+    vis_map = F.interpolate(vis_patches, size=(pred_depth.shape[2], pred_depth.shape[3]), mode='nearest')
 
-    # Fold back into a 2D image shape (averaging overlapping regions)
-    # Using unfold parameters to recreate spatial dimensions
-    output_size = (pred_depth.shape[2], pred_depth.shape[3])
-    divisor = F.fold(torch.ones_like(vis_patches), output_size=output_size, kernel_size=patch_size, stride=stride)
-    vis_map = F.fold(vis_patches, output_size=output_size, kernel_size=patch_size, stride=stride)
-    
-    # Avoid division by zero in non-patched areas
-    vis_map = vis_map / (divisor + 1e-8)
-    
     return final_loss, vis_map.squeeze()
 
-# def get_image_gradients(image):
+# def patch_pearson_correlation_loss(pred_depth, prior_depth, mask=None, patch_size=11, stride=4):
 #     """
-#     Computes the spatial gradients (dx, dy) of a depth map.
-#     This effectively captures the slope/curvature of the surface.
+#     Computes the Local Pearson Correlation Loss between rendered and prior depth maps.
+#     This provides scale and shift invariance locally, forcing structural alignment
+#     without causing global variance explosion.
     
 #     Args:
-#         image (Tensor): Depth map of shape (1, H, W)
+#         pred_depth (Tensor): Rendered depth map (1, H, W).
+#         prior_depth (Tensor): Monocular depth map prior (1, H, W).
+#         mask (Tensor): Boolean mask of valid regions (1, H, W).
+#         patch_size (int): Size of the sliding window (e.g., 11x11).
+#         stride (int): Stride for the sliding window. Higher stride saves VRAM.
+        
 #     Returns:
-#         dx, dy (Tensors): Spatial gradients along x and y axes.
+#         loss (Tensor): The computed scalar loss (between 0 and 1).
+#         vis_map (Tensor): A heatmap-ready tensor showing correlation per patch.
 #     """
-#     # Finite differences to calculate gradients
-#     dx = image[..., :, 1:] - image[..., :, :-1]
-#     dy = image[..., 1:, :] - image[..., :-1, :]
-#     return dx, dy
+#     # Ensure inputs have shape (1, 1, H, W) for unfold
+#     if pred_depth.dim() == 3:
+#         pred_depth = pred_depth.unsqueeze(0)
+#     if prior_depth.dim() == 3:
+#         prior_depth = prior_depth.unsqueeze(0)
+#     if mask is not None and mask.dim() == 3:
+#         mask = mask.unsqueeze(0).float()
+#     elif mask is None:
+#         mask = torch.ones_like(pred_depth)
 
-# def gradient_alignment_loss(pred_depth, prior_depth, mask=None):
-#     """
-#     Calculates the Gradient-Alignment Loss (GAL) between rendered and prior depths
-#     using Z-score normalization. 
-#     Returns the scalar loss and the X-gradients for debug visualization.
-#     """
-#     # 1. Z-score normalization ONLY on valid pixels to prevent zero-skew 
-#     # (Solves scale/shift ambiguity)
-#     if mask is not None:
-#         valid_pred = pred_depth[mask]
-#         valid_prior = prior_depth[mask]
-#         if valid_pred.numel() > 0:
-#             # FIX: .detach() prevents the optimizer from cheating by exploding the variance
-#             pred_mean = valid_pred.mean().detach()
-#             pred_std = valid_pred.std().detach()
-            
-#             prior_mean = valid_prior.mean()
-#             prior_std = valid_prior.std()
-            
-#             pred_norm = (pred_depth - pred_mean) / (pred_std + 1e-8)
-#             prior_norm = (prior_depth - prior_mean) / (prior_std + 1e-8)
-#         else:
-#             pred_norm, prior_norm = pred_depth, prior_depth
-#     else:
-#         # Same detach fix if no mask is used
-#         pred_mean, pred_std = pred_depth.mean().detach(), pred_depth.std().detach()
-#         pred_norm = (pred_depth - pred_mean) / (pred_std + 1e-8)
-#         prior_norm = (prior_depth - prior_depth.mean()) / (prior_depth.std() + 1e-8)
-    
-#     # 2. Compute spatial gradients on the continuous normalized images
-#     pred_dx, pred_dy = get_image_gradients(pred_norm)
-#     prior_dx, prior_dy = get_image_gradients(prior_norm)
+#     # 1. Unfold images into patches of shape (1, patch_size*patch_size, Num_Patches)
+#     pred_patches = F.unfold(pred_depth, kernel_size=patch_size, stride=stride)
+#     prior_patches = F.unfold(prior_depth, kernel_size=patch_size, stride=stride)
+#     mask_patches = F.unfold(mask, kernel_size=patch_size, stride=stride)
 
-#     # 3. L1 distance between gradients - Apply mask strictly to the computed gradients
-#     if mask is not None:
-#         # Shift mask to match the dimensions of the gradients
-        
-#         mask_dx = mask[..., :, 1:] & mask[..., :, :-1]
-#         mask_dy = mask[..., 1:, :] & mask[..., :-1, :]
-        
-#         loss_dx = torch.abs(pred_dx - prior_dx)[mask_dx].mean()
-#         loss_dy = torch.abs(pred_dy - prior_dy)[mask_dy].mean()
-        
-#         # Mask visualization outputs so they look clean
-#         pred_dx_vis = (pred_dx * mask_dx.float()).detach()
-#         prior_dx_vis = (prior_dx * mask_dx.float()).detach()
-#     else:
-#         loss_dx = torch.abs(pred_dx - prior_dx).mean()
-#         loss_dy = torch.abs(pred_dy - prior_dy).mean()
-#         pred_dx_vis = pred_dx.detach()
-#         prior_dx_vis = prior_dx.detach()
+#     # 2. Filter valid patches: Only keep patches where ALL pixels are within the valid mask
+#     # A patch is fully valid if the sum of its mask values equals patch_size * patch_size
+#     patch_area = patch_size * patch_size
+#     valid_patch_mask = (mask_patches.sum(dim=1) == patch_area).squeeze() # Boolean array of length Num_Patches
     
-#     # Return the total loss and the X-axis gradients for visualization
-#     return loss_dx + loss_dy, pred_dx_vis, prior_dx_vis
+#     # If no patches are completely valid, return 0 loss safely
+#     if not valid_patch_mask.any():
+#         return torch.tensor(0.0, device=pred_depth.device, requires_grad=True), torch.zeros_like(pred_depth)
+
+#     # Keep only valid patches
+#     valid_pred_patches = pred_patches[0, :, valid_patch_mask]   # (patch_area, N_valid)
+#     valid_prior_patches = prior_patches[0, :, valid_patch_mask] # (patch_area, N_valid)
+
+#     # 3. Compute Pearson Correlation per patch
+#     # E(X) and E(Y)
+#     mean_pred = valid_pred_patches.mean(dim=0, keepdim=True)
+#     mean_prior = valid_prior_patches.mean(dim=0, keepdim=True)
+    
+#     # X - E(X) and Y - E(Y)
+#     centered_pred = valid_pred_patches - mean_pred
+#     centered_prior = valid_prior_patches - mean_prior
+    
+#     # Covariance (numerator)
+#     covar = (centered_pred * centered_prior).sum(dim=0)
+    
+#     # Variances (denominator components)
+#     var_pred = (centered_pred ** 2).sum(dim=0)
+#     var_prior = (centered_prior ** 2).sum(dim=0)
+    
+#     # Denominator with epsilon for numerical stability
+#     denom = torch.sqrt(var_pred * var_prior) + 1e-8
+    
+#     # Pearson r for each valid patch (Values between -1 and 1)
+#     pearson_r = covar / denom
+    
+#     # 4. Final Loss: (1 - r) / 2 maps r=1 to loss=0, r=-1 to loss=1
+#     loss_per_patch = (1.0 - pearson_r) / 2.0
+#     final_loss = loss_per_patch.mean()
+
+#     # --- Prepare Visualization Map (Optional Debug Info) ---
+#     # We create a 1D tensor of zeros for all patches, then fill the valid ones with their correlation
+#     # We visualize 'pearson_r' directly to see where correlation is high (1) or low (<0)
+#     # vis_patches = torch.zeros(1, 1, mask_patches.shape[2], device=pred_depth.device)
+#     vis_patches = torch.zeros(1, patch_area, mask_patches.shape[2], device=pred_depth.device)
+#     # vis_patches[0, 0, valid_patch_mask] = pearson_r.detach()
+#     vis_patches[0, :, valid_patch_mask] = pearson_r.detach().unsqueeze(0)
+
+#     # Fold back into a 2D image shape (averaging overlapping regions)
+#     # Using unfold parameters to recreate spatial dimensions
+#     output_size = (pred_depth.shape[2], pred_depth.shape[3])
+#     divisor = F.fold(torch.ones_like(vis_patches), output_size=output_size, kernel_size=patch_size, stride=stride)
+#     vis_map = F.fold(vis_patches, output_size=output_size, kernel_size=patch_size, stride=stride)
+    
+#     # Avoid division by zero in non-patched areas
+#     vis_map = vis_map / (divisor + 1e-8)
+    
+#     return final_loss, vis_map.squeeze()
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
@@ -322,51 +338,44 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Initialize visualization variable for Pearson
         pearson_vis_map = None
 
-        # prior depth loss (SMDGS vs. Our Pearson)
-        # MODIFIED: Added our loss algorithm, and used it as a dependency on the USE_GAL flag
-        if dataset.aligned_depth and iteration < opt.geom_prior_until_iter and dataset.prior_depth:   
+        # prior depth loss (SMDGS vs. Our LPC Hybrid)
+        # MODIFIED: Added our loss algorithm, and used it as a dependency on the USE_LPC flag
+        if dataset.aligned_depth and iteration < opt.geom_prior_until_iter and dataset.prior_depth:
             alignedD = viewpoint_cam.get_alignedD(use_mask)
 
-            # Use ONLY geom_prior_mask to focus on valid foreground geometry
-            valid_mask = geom_prior_mask.to(torch.bool)
+            # PRINCIPLE 2: Confidence Masking
+            # Bring back consist_mask (probability maps from SfM alignment)
+            consist_mask = viewpoint_cam.get_pmaps(use_mask)
+            # Combine it with geom_prior_mask to focus ONLY on valid, high-confidence foreground geometry
+            valid_mask = consist_mask.to(torch.bool) & geom_prior_mask.to(torch.bool)
             
-            if dataset.use_gal:
-                # Extension B: Local Pearson Correlation Loss
+            if dataset.use_lpc:
+                # PRINCIPLE 3: Warm-up Mechanism for LPC
+                # Gradually increase the Pearson weight from 0 to 1 over the first 3000 iterations.
+                # This prevents "optimization shock" and allows the photometric loss to settle first.
+                warmup_factor = min(1.0, iteration / 3000.0)
+                
+                # Calculate Local Pearson Correlation Loss (LPC)
                 loss_pearson, pearson_vis_map = patch_pearson_correlation_loss(
                     depth, alignedD, mask=valid_mask, patch_size=11, stride=4
                 )
-                loss += opt.lambda_2 * loss_pearson
+                
+                # Calculate Original SMDGS Absolute Depth Loss (The Global Anchor)
+                depth_err = torch.abs((alignedD - depth) / (alignedD + depth + 1e-8))
+                depth_weight = (1.0 / torch.exp(100 * depth_err)).detach()
+                LalignedD = (depth_weight * torch.abs(alignedD - depth))[valid_mask].mean()
+                
+                # PRINCIPLE 1: Hybrid Approach (Weak Anchor + Strong Pearson)
+                # The Absolute anchor gets a severely reduced weight (10%) to keep the scene grounded in 3D space.
+                # The Pearson loss gets the full lambda weight, scaled safely by the warmup factor.
+                loss += opt.lambda_2 * (0.1 * (1 / scene.cameras_extent) * LalignedD + warmup_factor * loss_pearson)
+                
             else:
                 # Original SMDGS Absolute Depth Loss
                 depth_err = torch.abs((alignedD - depth) / (alignedD + depth + 1e-8))
                 depth_weight = (1.0 / torch.exp(100 * depth_err)).detach()
                 LalignedD = (depth_weight * torch.abs(alignedD - depth))[valid_mask].mean()
                 loss += opt.lambda_2 * (1 / scene.cameras_extent) * LalignedD
-
-        # # Initialize GAL variables for debug block
-        # pred_dx_vis, prior_dx_vis = None, None
-
-        # # prior depth loss (SMDGS vs. Our GAL)
-        # # MODIFIED: Added our loss algorithm (GAL), and used it as a dependency on the USE_GAL flag
-        # if dataset.aligned_depth and iteration < opt.geom_prior_until_iter and dataset.prior_depth:       
-        #     alignedD = viewpoint_cam.get_alignedD(use_mask)
-        #     # Use ONLY geom_prior_mask to focus on valid foreground geometry
-        #     valid_mask = geom_prior_mask.to(torch.bool)
-        #     if dataset.use_gal:
-        #         # Our proposed Selective Gradient-Alignment Loss
-        #         # We apply the valid_mask to ensure "Selective" processing
-        #         loss_gal, pred_dx, prior_dx = gradient_alignment_loss(depth, alignedD, mask=valid_mask)
-        #         loss += opt.lambda_2 * loss_gal
-                
-        #         # Store for debug visualization (detached from computation graph)
-        #         pred_dx_vis = pred_dx.detach()
-        #         prior_dx_vis = prior_dx.detach()
-        #     else:
-        #         # Original SMDGS Absolute Depth Loss
-        #         depth_err = torch.abs((alignedD - depth) / (alignedD + depth + 1e-8))
-        #         depth_weight = (1.0 / torch.exp(100 * depth_err)).detach()
-        #         LalignedD = (depth_weight * torch.abs(alignedD - depth))[valid_mask].mean()
-        #         loss += opt.lambda_2 * (1 / scene.cameras_extent) * LalignedD
 
         # scale loss
         if visibility_filter.sum() > 0:
@@ -394,7 +403,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             image_to_show = np.concatenate([row0, row1], axis=0)
 
             # MODIFIED: Add Debug Visualization for Pearson Correlation Heatmap
-            if dataset.use_gal and pearson_vis_map is not None:
+            if dataset.use_lpc and pearson_vis_map is not None:
                 def corr_to_colormap(corr_map, target_shape, valid_mask):
                     corr_np = corr_map.squeeze().detach().cpu().numpy()
                     mask_np = valid_mask.squeeze().cpu().numpy().astype(bool)
@@ -432,52 +441,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 # Format: [Empty Placeholder] | [Empty Placeholder] | [Pearson Heatmap]
                 corr_row = np.concatenate([placeholder, placeholder, pearson_color], axis=1)
                 image_to_show = np.concatenate([image_to_show, corr_row], axis=0)
-
-            # # MODIFIED: Add Debug Visualization for GAL Gradients
-            # if dataset.use_gal and pred_dx_vis is not None:
-            #     def norm_grad_to_colormap(g, target_shape):
-            #         g_np = g.squeeze().cpu().numpy()
-            #         # 1. Reconstruct the valid mask perfectly (since invalid pixels were multiplied by 0.0)
-            #         valid_mask = (g_np != 0)
-                    
-            #         # 2. Only process if we have valid pixels
-            #         if valid_mask.sum() > 0:
-            #             # Calculate percentiles ONLY on the valid pixels to prevent statistical collapse
-            #             vmin, vmax = np.percentile(g_np[valid_mask], [2, 98])
-                        
-            #             # Clip and normalize only the valid regions
-            #             g_np_clipped = np.clip(g_np, vmin, vmax)
-            #             g_norm = np.zeros_like(g_np)
-            #             g_norm[valid_mask] = (g_np_clipped[valid_mask] - vmin) / (vmax - vmin + 1e-8)
-                        
-            #             g_img = (g_norm * 255).astype(np.uint8)
-            #         else:
-            #             g_img = np.zeros_like(g_np, dtype=np.uint8)
-                    
-            #         # 3. Apply the Viridis colormap
-            #         colored_img = cv2.applyColorMap(g_img, cv2.COLORMAP_VIRIDIS)
-                    
-            #         # 4. Force the background (invalid pixels) to be purely black
-            #         colored_img[~valid_mask] = 0
-                    
-            #         # Resize to fit the debug image grid
-            #         return cv2.resize(colored_img, target_shape)
-                
-            #     # Use target shape (Width, Height) from the ground truth image
-            #     target_shape = (gt_img_show.shape[1], gt_img_show.shape[0])
-                
-            #     # Generate heatmaps
-            #     pred_dx_color = norm_grad_to_colormap(pred_dx_vis, target_shape)
-            #     prior_dx_color = norm_grad_to_colormap(prior_dx_vis, target_shape)
-                
-            #     # Create a black placeholder for the 3rd column
-            #     placeholder = np.zeros_like(gt_img_show)
-                
-            #     # Concatenate row and add to the main image grid
-            #     # Format: [Rendered Gradient] | [Monocular Gradient (Target)] | [Empty]
-            #     grad_row = np.concatenate([pred_dx_color, prior_dx_color, placeholder], axis=1)
-            #     image_to_show = np.concatenate([image_to_show, grad_row], axis=0)
-
 
             cv2.imwrite(os.path.join(debug_path, "%05d"%iteration + "_" + viewpoint_cam.image_name + ".jpg"), image_to_show)
 

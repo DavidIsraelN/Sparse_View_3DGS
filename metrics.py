@@ -88,7 +88,7 @@ if __name__ == "__main__":
     # Set up command line argument parser
     parser = ArgumentParser(description="Training script parameters")
     parser.add_argument('--model_paths', '-m', required=True, nargs="+", type=str, default=[])
-    parser.add_argument('--gpu_id', type=int, help='GPU ID')
+    parser.add_argument('--gpu_id', type=int, default=0, help='GPU ID')
     args = parser.parse_args()
     device = torch.device(f"cuda:{args.gpu_id}")
     torch.cuda.set_device(device)

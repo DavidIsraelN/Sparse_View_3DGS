@@ -78,9 +78,9 @@ class ModelParams(ParamGroup):
         self.smooth = True
         self.warp = True
 
-        # --- ADDED: GAL Flag ---
-        # Determines whether to use the original SMDGS absolute alignment or our GAL
-        self.use_gal = False
+        # --- ADDED: LPC Flag ---
+        # Determines whether to use the original SMDGS absolute alignment or our LPC
+        self.use_lpc = False
 
         super().__init__(parser, "Loading Parameters", sentinel)
 
