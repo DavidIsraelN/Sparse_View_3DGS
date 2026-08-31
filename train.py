@@ -369,6 +369,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 # The Absolute anchor gets a severely reduced weight (10%) to keep the scene grounded in 3D space.
                 # The Pearson loss gets the full lambda weight, scaled safely by the warmup factor.
                 loss += opt.lambda_2 * (0.1 * (1 / scene.cameras_extent) * LalignedD + warmup_factor * loss_pearson)
+
+                # PRINCIPLE 4: The Vacuum Cleaner (Mask-based Background Suppression)
+                # Heavily penalize accumulated opacity in unmasked regions (air/background).
+                # This explicitly forces the model to remove floaters and noise that are not guided by our strict LPC depth prior.
+                loss_bg_opacity = opac_s[~valid_mask].mean()
+                loss += 0.5 * loss_bg_opacity  # 0.5 is a strong penalty to wipe out noise
                 
             else:
                 # Original SMDGS Absolute Depth Loss
@@ -541,6 +547,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 if mask.sum() > 0:
                     ncc_loss = 0.15 * ncc.mean()
                     loss += ncc_loss
+
+        # PRINCIPLE 5: The Cloud Shaker (Continuous Sparsity Regularization)
+        # Apply a tiny global penalty to the opacity of ALL Gaussians.
+        # Visible Gaussians will easily resist this via RGB gradients.
+        # "Hidden garbage" (zero RGB gradient) will slowly fade until opacity < 0.005,
+        # at which point 3DGS's native densify_and_prune will delete them permanently.
+        if dataset.use_lpc and iteration > 3000:
+            loss_sparsity = gaussians.get_opacity.mean()
+            loss += 0.005 * loss_sparsity
 
         loss.backward()
         iter_end.record()
