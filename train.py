@@ -130,96 +130,6 @@ def patch_pearson_correlation_loss(pred_depth, prior_depth, mask=None, patch_siz
 
     return final_loss, vis_map.squeeze()
 
-# def patch_pearson_correlation_loss(pred_depth, prior_depth, mask=None, patch_size=11, stride=4):
-#     """
-#     Computes the Local Pearson Correlation Loss between rendered and prior depth maps.
-#     This provides scale and shift invariance locally, forcing structural alignment
-#     without causing global variance explosion.
-    
-#     Args:
-#         pred_depth (Tensor): Rendered depth map (1, H, W).
-#         prior_depth (Tensor): Monocular depth map prior (1, H, W).
-#         mask (Tensor): Boolean mask of valid regions (1, H, W).
-#         patch_size (int): Size of the sliding window (e.g., 11x11).
-#         stride (int): Stride for the sliding window. Higher stride saves VRAM.
-        
-#     Returns:
-#         loss (Tensor): The computed scalar loss (between 0 and 1).
-#         vis_map (Tensor): A heatmap-ready tensor showing correlation per patch.
-#     """
-#     # Ensure inputs have shape (1, 1, H, W) for unfold
-#     if pred_depth.dim() == 3:
-#         pred_depth = pred_depth.unsqueeze(0)
-#     if prior_depth.dim() == 3:
-#         prior_depth = prior_depth.unsqueeze(0)
-#     if mask is not None and mask.dim() == 3:
-#         mask = mask.unsqueeze(0).float()
-#     elif mask is None:
-#         mask = torch.ones_like(pred_depth)
-
-#     # 1. Unfold images into patches of shape (1, patch_size*patch_size, Num_Patches)
-#     pred_patches = F.unfold(pred_depth, kernel_size=patch_size, stride=stride)
-#     prior_patches = F.unfold(prior_depth, kernel_size=patch_size, stride=stride)
-#     mask_patches = F.unfold(mask, kernel_size=patch_size, stride=stride)
-
-#     # 2. Filter valid patches: Only keep patches where ALL pixels are within the valid mask
-#     # A patch is fully valid if the sum of its mask values equals patch_size * patch_size
-#     patch_area = patch_size * patch_size
-#     valid_patch_mask = (mask_patches.sum(dim=1) == patch_area).squeeze() # Boolean array of length Num_Patches
-    
-#     # If no patches are completely valid, return 0 loss safely
-#     if not valid_patch_mask.any():
-#         return torch.tensor(0.0, device=pred_depth.device, requires_grad=True), torch.zeros_like(pred_depth)
-
-#     # Keep only valid patches
-#     valid_pred_patches = pred_patches[0, :, valid_patch_mask]   # (patch_area, N_valid)
-#     valid_prior_patches = prior_patches[0, :, valid_patch_mask] # (patch_area, N_valid)
-
-#     # 3. Compute Pearson Correlation per patch
-#     # E(X) and E(Y)
-#     mean_pred = valid_pred_patches.mean(dim=0, keepdim=True)
-#     mean_prior = valid_prior_patches.mean(dim=0, keepdim=True)
-    
-#     # X - E(X) and Y - E(Y)
-#     centered_pred = valid_pred_patches - mean_pred
-#     centered_prior = valid_prior_patches - mean_prior
-    
-#     # Covariance (numerator)
-#     covar = (centered_pred * centered_prior).sum(dim=0)
-    
-#     # Variances (denominator components)
-#     var_pred = (centered_pred ** 2).sum(dim=0)
-#     var_prior = (centered_prior ** 2).sum(dim=0)
-    
-#     # Denominator with epsilon for numerical stability
-#     denom = torch.sqrt(var_pred * var_prior) + 1e-8
-    
-#     # Pearson r for each valid patch (Values between -1 and 1)
-#     pearson_r = covar / denom
-    
-#     # 4. Final Loss: (1 - r) / 2 maps r=1 to loss=0, r=-1 to loss=1
-#     loss_per_patch = (1.0 - pearson_r) / 2.0
-#     final_loss = loss_per_patch.mean()
-
-#     # --- Prepare Visualization Map (Optional Debug Info) ---
-#     # We create a 1D tensor of zeros for all patches, then fill the valid ones with their correlation
-#     # We visualize 'pearson_r' directly to see where correlation is high (1) or low (<0)
-#     # vis_patches = torch.zeros(1, 1, mask_patches.shape[2], device=pred_depth.device)
-#     vis_patches = torch.zeros(1, patch_area, mask_patches.shape[2], device=pred_depth.device)
-#     # vis_patches[0, 0, valid_patch_mask] = pearson_r.detach()
-#     vis_patches[0, :, valid_patch_mask] = pearson_r.detach().unsqueeze(0)
-
-#     # Fold back into a 2D image shape (averaging overlapping regions)
-#     # Using unfold parameters to recreate spatial dimensions
-#     output_size = (pred_depth.shape[2], pred_depth.shape[3])
-#     divisor = F.fold(torch.ones_like(vis_patches), output_size=output_size, kernel_size=patch_size, stride=stride)
-#     vis_map = F.fold(vis_patches, output_size=output_size, kernel_size=patch_size, stride=stride)
-    
-#     # Avoid division by zero in non-patched areas
-#     vis_map = vis_map / (divisor + 1e-8)
-    
-#     return final_loss, vis_map.squeeze()
-
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
@@ -366,9 +276,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 LalignedD = (depth_weight * torch.abs(alignedD - depth))[valid_mask].mean()
                 
                 # PRINCIPLE 1: Hybrid Approach (Weak Anchor + Strong Pearson)
-                # The Absolute anchor gets a severely reduced weight (10%) to keep the scene grounded in 3D space.
+                # The Absolute anchor gets a severely reduced weight (10%, now MODIFIED to 50%) to keep the scene grounded in 3D space.
                 # The Pearson loss gets the full lambda weight, scaled safely by the warmup factor.
-                loss += opt.lambda_2 * (0.1 * (1 / scene.cameras_extent) * LalignedD + warmup_factor * loss_pearson)
+                loss += opt.lambda_2 * (0.5 * (1 / scene.cameras_extent) * LalignedD + warmup_factor * loss_pearson)
 
                 # PRINCIPLE 4: The Vacuum Cleaner (Mask-based Background Suppression)
                 # Heavily penalize accumulated opacity in unmasked regions (air/background).
@@ -439,13 +349,40 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 
                 # Generate the Pearson heatmap using our geom_prior_mask
                 pearson_color = corr_to_colormap(pearson_vis_map, target_shape, geom_prior_mask)
-                
-                # Create a black placeholder to maintain the 3-column grid structure
+
+                # --- ADDED: Absolute Error Map Visualization ---
+                if dataset.aligned_depth:
+                    alignedD_vis = viewpoint_cam.get_alignedD(use_mask)
+                    # Calculate absolute error only on the masked foreground region
+                    depth_error = torch.abs(render_pkg['plane_depth'] - alignedD_vis) * geom_prior_mask
+                    
+                    # Normalize for visualization
+                    err_np = depth_error.squeeze().detach().cpu().numpy()
+                    
+                    # Clip extreme outliers for a cleaner heatmap
+                    if (err_np > 0).any():
+                        vmin, vmax = np.percentile(err_np[err_np > 0], [2, 98])
+                        err_np = np.clip(err_np, vmin, vmax)
+                    else:
+                        vmin, vmax = 0.0, 1.0
+                        
+                    err_norm = (err_np - vmin) / (vmax - vmin + 1e-8)
+                    err_img = (err_norm * 255).astype(np.uint8)
+                    
+                    # Apply colormap (HOT: Black=0 error, White/Yellow=High error)
+                    err_color = cv2.applyColorMap(err_img, cv2.COLORMAP_HOT)
+                    
+                    # Keep background (unmasked areas) pure black
+                    err_color[geom_prior_mask.squeeze().cpu().numpy() == 0] = 0
+                    err_color = cv2.resize(err_color, target_shape)
+                else:
+                    err_color = np.zeros_like(gt_img_show)
+
+                # Create a black placeholder for the 3rd column
                 placeholder = np.zeros_like(gt_img_show)
                 
-                # Concatenate row and add to the main image grid
-                # Format: [Empty Placeholder] | [Empty Placeholder] | [Pearson Heatmap]
-                corr_row = np.concatenate([placeholder, placeholder, pearson_color], axis=1)
+                # Concatenate row: [Empty Placeholder] | [Absolute Error Map] | [Pearson Heatmap]
+                corr_row = np.concatenate([placeholder, err_color, pearson_color], axis=1)
                 image_to_show = np.concatenate([image_to_show, corr_row], axis=0)
 
             cv2.imwrite(os.path.join(debug_path, "%05d"%iteration + "_" + viewpoint_cam.image_name + ".jpg"), image_to_show)
@@ -554,8 +491,19 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # "Hidden garbage" (zero RGB gradient) will slowly fade until opacity < 0.005,
         # at which point 3DGS's native densify_and_prune will delete them permanently.
         if dataset.use_lpc and iteration > 3000:
-            loss_sparsity = gaussians.get_opacity.mean()
-            loss += 0.005 * loss_sparsity
+            # loss_sparsity = gaussians.get_opacity.mean()
+            # loss += 0.005 * loss_sparsity
+
+        # MODIFIED: GNS (Gradient-Driven Natural Selection) - REFINED
+        # Target hidden ghost Gaussians safely with a "Recovery Window".
+        # We pause GNS for 500 iterations after every native opacity reset (every 3000 iters).
+        # This allows visible Gaussians to recover their opacity via RGB loss,
+        # while hidden ghosts stay weak and are slowly killed when GNS resumes.
+            # Check if we are outside the 500-iteration recovery window after a reset
+            if (iteration % opt.opacity_reset_interval) > 500:
+                # Use a drastically reduced weight (1e-4) to act as a slow poison
+                loss_survival = (gaussians._opacity.mean() - (-20.0)) ** 2
+                loss += 0.0001 * loss_survival
 
         loss.backward()
         iter_end.record()

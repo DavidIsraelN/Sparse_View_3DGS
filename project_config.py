@@ -71,6 +71,9 @@ TOTAL_ITERATIONS = 15000
 # Spherical Harmonics degree (Default is 3. Use 1 or 0 to save massive VRAM)
 SH_DEGREE = 3
 
+# size of the voxel in mesh rendering by the render.py file
+VOXEL_SIZE = 0.01
+
 # =========================================================
 def ensure_directories():
     """

@@ -9,6 +9,7 @@ set -e
 SCENE=$(python -c "from project_config import SCENE_NAME; print(SCENE_NAME)")
 RESOLUTION=$(python -c "from project_config import RESOLUTION_SCALE; print(RESOLUTION_SCALE)")
 ITERATIONS=$(python -c "from project_config import TOTAL_ITERATIONS; print(TOTAL_ITERATIONS)")
+VOXEL=$(python -c "from project_config import VOXEL_SIZE; print(VOXEL_SIZE)")
 
 # Pull the exact directory paths dynamically from our Python configuration!
 SCENE_DIR=$(python -c "from project_config import SCENE_DIR; print(SCENE_DIR)")
@@ -76,11 +77,19 @@ python train.py \
     --iterations $ITERATIONS \
     --model_path $SMDGS_OUT
 
+# render and score the output
+python render.py \
+    -m $SMDGS_OUT \
+    --voxel_size $VOXEL
+
+python metrics.py \
+    -m $SMDGS_OUT
+
 # ---------------------------------------------------------
 # Step 6: Train Our Proposed Model (Selective LPC loss)
 # ---------------------------------------------------------
 echo -e "\n---> [Step 6/6] "
-echo -e "Starting Proposed Method (Selective ---lpc Loss) Training..."
+echo -e "Starting Proposed Method (Selective LPC Hybrid Loss + some regularization) Training..."
 
 # Execute the training script with the --use_lpc flag to activate our custom loss
 python train.py \
@@ -89,6 +98,14 @@ python train.py \
     --iterations $ITERATIONS \
     --model_path $OUR_METHOD_OUT \
     --use_lpc
+
+# render and score the output
+python render.py \
+    -m $OUR_METHOD_OUT \
+    --voxel_size $VOXEL
+
+python metrics.py \
+    -m $OUR_METHOD_OUT
 
 echo -e "\n========================================================="
 echo "Pipeline completed successfully!"
