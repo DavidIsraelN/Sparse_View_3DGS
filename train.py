@@ -178,6 +178,91 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             train_viewpoint_stack = scene.getTrainCameras().copy()
         viewpoint_cam = train_viewpoint_stack.pop(randint(0, len(train_viewpoint_stack)-1))
 
+        # EXTENSION A: Pseudo-View Alternating Optimization (TV Loss)
+        # We steal 1 out of every 5 iterations after iteration 7000 to render a novel view.
+        # Use % 5 == 2 so we DON'T collide with iterations. ending in 0 (which 3DGS uses for TQDM, Pruning, and Opacity Resets!)
+        if iteration > 7000 and iteration % 5 == 2:
+            import copy
+            import json
+                        
+            # 1. Generate Safe Pseudo-View (Add 5% Gaussian noise to translation)
+            pseudo_cam = copy.copy(viewpoint_cam)
+            # Extent gives us the rough size of the scene to scale our noise properly
+            noise_t = (torch.randn(3, device=dataset.data_device) * (scene.cameras_extent * 0.05))
+            
+            # The extrinsics matrix (world_view_transform) is 4x4. Translation is the 4th row (index 3)
+            pseudo_cam.world_view_transform = pseudo_cam.world_view_transform.clone()
+            pseudo_cam.world_view_transform[3, :3] += noise_t
+            # Recalculate projection with the new extrinsics
+            pseudo_cam.full_proj_transform = pseudo_cam.world_view_transform.clone() @ pseudo_cam.projection_matrix.clone()
+            # Approximate the new camera center
+            pseudo_cam.camera_center = pseudo_cam.camera_center.clone() - noise_t 
+
+            # 2. Render from the Novel View (We don't need GT for this)
+            render_pkg_pseudo = render(pseudo_cam, gaussians, pipe, bg, contrib_densify=contrib_densify)
+            depth_pseudo = render_pkg_pseudo["plane_depth"]
+            opac_pseudo = render_pkg_pseudo["opac_s"]
+
+            # 3. Calculate Spatial Gradients for TV Loss (Differences in X and Y)
+            dx = depth_pseudo[..., :, 1:] - depth_pseudo[..., :, :-1]
+            dy = depth_pseudo[..., 1:, :] - depth_pseudo[..., :-1, :]
+
+            # 4. Handle the "Air" Problem (Dynamic Masking)
+            # Apply TV loss where there is geometric presence (Opacity > 0.1). 
+            # This prevents filling genuine holes (like bicycle spokes) and smearing edges into the background.
+            valid_mask = (opac_pseudo > 0.1) 
+            valid_dx = valid_mask[..., :, 1:] & valid_mask[..., :, :-1]
+            valid_dy = valid_mask[..., 1:, :] & valid_mask[..., :-1, :]
+
+            loss_tv = 0.0
+            if valid_dx.sum() > 0: 
+                loss_tv += torch.abs(dx)[valid_dx].mean()
+            if valid_dy.sum() > 0: 
+                loss_tv += torch.abs(dy)[valid_dy].mean()
+
+            # 5. Safe Backprop and Graph Cleanup
+            if isinstance(loss_tv, torch.Tensor):
+                loss_pseudo = 0.1 * loss_tv 
+                loss_pseudo.backward()
+                gaussians.optimizer.step()
+            else:
+                loss_pseudo = None
+            
+            gaussians.optimizer.zero_grad(set_to_none=True)
+
+            # 6. LOGGING: Save visuals and camera poses every 250 iterations for the final report (like 7252, 7502..)
+            if (iteration - 2) % 250 == 0:
+                # Prepare images
+                img_pseudo = render_pkg_pseudo["render"].permute(1,2,0).clamp(0,1).detach().cpu().numpy() * 255
+                depth_vis = depth_pseudo.squeeze().detach().cpu().numpy()
+                
+                # Normalize depth for visualization and apply colormap
+                if (depth_vis.max() - depth_vis.min()) > 0:
+                    depth_vis = cv2.applyColorMap(((depth_vis - depth_vis.min()) / (depth_vis.max() - depth_vis.min()) * 255).astype(np.uint8), cv2.COLORMAP_JET)
+                else:
+                    depth_vis = np.zeros((*depth_vis.shape, 3), dtype=np.uint8)
+                
+                # Concat RGB and Depth side-by-side (convert RGB from RGB to BGR for OpenCV)
+                img_to_save = np.concatenate([img_pseudo[..., ::-1], depth_vis], axis=1)
+                os.makedirs(os.path.join(debug_path, "pseudo_imgs"), exist_ok=True) # Ensure the directory exists before saving
+                cv2.imwrite(os.path.join(debug_path, f"pseudo_imgs/pseudo_view_{iteration:05d}.jpg"), img_to_save)
+
+                # Save Camera Extrinsics so we can render baselines from this exact spot later!
+                cam_data = {
+                    "iteration": iteration,
+                    "world_view_transform": pseudo_cam.world_view_transform.cpu().numpy().tolist(),
+                    "full_proj_transform": pseudo_cam.full_proj_transform.cpu().numpy().tolist(),
+                    "camera_center": pseudo_cam.camera_center.cpu().numpy().tolist()
+                }
+                with open(os.path.join(debug_path, f"pseudo_imgs/pseudo_cam_{iteration:05d}.json"), 'w') as f:
+                    json.dump(cam_data, f)
+
+            # 7. MEMORY FIX: Delete EVERYTHING related to the pseudo view instantly
+            del render_pkg_pseudo, depth_pseudo, opac_pseudo, dx, dy, valid_dx, valid_dy, valid_mask, pseudo_cam, loss_tv, loss_pseudo
+            
+            # Skip the standard iteration! This prevents running two renders in one step and saves VRAM.
+            continue
+
         # Pick a nearest camera
         # MODIFIED: Initialize variable to prevent UnboundLocalError.
         nearest_cam = None  
@@ -485,20 +570,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     ncc_loss = 0.15 * ncc.mean()
                     loss += ncc_loss
 
-        # PRINCIPLE 5: The Cloud Shaker (Continuous Sparsity Regularization)
-        # Apply a tiny global penalty to the opacity of ALL Gaussians.
-        # Visible Gaussians will easily resist this via RGB gradients.
-        # "Hidden garbage" (zero RGB gradient) will slowly fade until opacity < 0.005,
-        # at which point 3DGS's native densify_and_prune will delete them permanently.
-        if dataset.use_lpc and iteration > 3000:
-            # loss_sparsity = gaussians.get_opacity.mean()
-            # loss += 0.005 * loss_sparsity
-
-        # MODIFIED: GNS (Gradient-Driven Natural Selection) - REFINED
+        # PRINCIPLE 5: GNS (Gradient-Driven Natural Selection) - REFINED
         # Target hidden ghost Gaussians safely with a "Recovery Window".
         # We pause GNS for 500 iterations after every native opacity reset (every 3000 iters).
         # This allows visible Gaussians to recover their opacity via RGB loss,
         # while hidden ghosts stay weak and are slowly killed when GNS resumes.
+        if dataset.use_lpc and iteration > 3000:
             # Check if we are outside the 500-iteration recovery window after a reset
             if (iteration % opt.opacity_reset_interval) > 500:
                 # Use a drastically reduced weight (1e-4) to act as a slow poison
