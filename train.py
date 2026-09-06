@@ -178,6 +178,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             train_viewpoint_stack = scene.getTrainCameras().copy()
         viewpoint_cam = train_viewpoint_stack.pop(randint(0, len(train_viewpoint_stack)-1))
 
+        # MODIFIED: 
         # EXTENSION A: Pseudo-View Alternating Optimization (TV Loss)
         # We steal 1 out of every 5 iterations after iteration 7000 to render a novel view.
         # Use % 5 == 2 so we DON'T collide with iterations.
