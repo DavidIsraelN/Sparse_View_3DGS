@@ -180,8 +180,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # EXTENSION A: Pseudo-View Alternating Optimization (TV Loss)
         # We steal 1 out of every 5 iterations after iteration 7000 to render a novel view.
-        # Use % 5 == 2 so we DON'T collide with iterations. ending in 0 (which 3DGS uses for TQDM, Pruning, and Opacity Resets!)
-        if iteration > 7000 and iteration % 5 == 2:
+        # Use % 5 == 2 so we DON'T collide with iterations.
+        if dataset.use_extension_a and iteration > 7000 and iteration % 5 == 2:
             import copy
             import json
                         
@@ -222,7 +222,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             # 5. Safe Backprop and Graph Cleanup
             if isinstance(loss_tv, torch.Tensor):
-                loss_pseudo = 0.1 * loss_tv 
+                loss_pseudo = opt.lambda_tv * loss_tv
                 loss_pseudo.backward()
                 gaussians.optimizer.step()
             else:
@@ -570,17 +570,25 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     ncc_loss = 0.15 * ncc.mean()
                     loss += ncc_loss
 
-        # PRINCIPLE 5: GNS (Gradient-Driven Natural Selection) - REFINED
-        # Target hidden ghost Gaussians safely with a "Recovery Window".
-        # We pause GNS for 500 iterations after every native opacity reset (every 3000 iters).
-        # This allows visible Gaussians to recover their opacity via RGB loss,
-        # while hidden ghosts stay weak and are slowly killed when GNS resumes.
+        # PRINCIPLE 5: SPATIAL PRUNING MECHANISMS (Dropout vs. GNS)
+        # Based on the ablation study, these mechanisms are mutually exclusive.
         if dataset.use_lpc and iteration > 3000:
-            # Check if we are outside the 500-iteration recovery window after a reset
-            if (iteration % opt.opacity_reset_interval) > 500:
-                # Use a drastically reduced weight (1e-4) to act as a slow poison
-                loss_survival = (gaussians._opacity.mean() - (-20.0)) ** 2
-                loss += 0.0001 * loss_survival
+            if dataset.use_gns:
+                # GNS (Gradient-Driven Natural Selection) - REFINED
+                # Target hidden ghost Gaussians safely with a "Recovery Window".
+                # We pause GNS for 500 iterations after every native opacity reset (every 3000 iters).
+                if (iteration % opt.opacity_reset_interval) > 500:
+                    # Use a drastically reduced weight (1e-4) to act as a slow poison
+                    loss_survival = (gaussians._opacity.mean() - (-20.0)) ** 2
+                    loss += 0.0001 * loss_survival
+            else:
+                # The Cloud Shaker (Continuous Sparsity Regularization / Dropout)
+                # Apply a tiny global penalty to the opacity of ALL Gaussians.
+                # Visible Gaussians will easily resist this via RGB gradients.
+                # "Hidden garbage" (zero RGB gradient) will slowly fade until opacity < 0.005,
+                # at which point 3DGS's native densify_and_prune will delete them permanently.
+                loss_sparsity = gaussians.get_opacity.mean()
+                loss += 0.005 * loss_sparsity
 
         loss.backward()
         iter_end.record()

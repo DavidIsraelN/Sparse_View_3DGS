@@ -17,7 +17,7 @@ PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 # 1. GLOBAL SCENE SETTINGS
 # Change this single variable to switch the entire pipeline to a different scene
 # ==============================================================================
-SCENE_NAME = "bicycle"
+SCENE_NAME = "bicycle" # or "garden"
 
 # ==============================================================================
 # 2. DEPTH MODEL CONFIGURATION
@@ -57,7 +57,11 @@ ALIGNED_DEPTH_DIR = os.path.join(SCENE_DIR, "output", "local_aligned")
 OUTPUT_BASE_DIR = os.path.join(PROJECT_ROOT, "output")
 VANILLA_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "baseline_vanilla")
 SMDGS_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "baseline_smdgs")
-OUR_METHOD_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "selective_LPC_Hybrid_loss")
+# Ablation Study Outputs
+RUN_16_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "run_16_hybrid_LPC")
+RUN_17_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "run_17_hybrid_LPC_GNS")
+RUN_18_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "run_18_hybrid_LPC_GNS_extA")
+RUN_20_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "run_20_hybrid_LPC_extA")
 
 # =========================================================
 # 4. Training Hyperparameters
@@ -66,7 +70,8 @@ OUR_METHOD_OUT_DIR = os.path.join(OUTPUT_BASE_DIR, SCENE_NAME, "selective_LPC_Hy
 RESOLUTION_SCALE = 2
 
 # Total training iterations (SMDGS uses 15k for geometric priors)
-TOTAL_ITERATIONS = 15000
+REGULAR_ITERATIONS = 15000
+EXTENSION_A_ITERATIONS = 16000
 
 # Spherical Harmonics degree (Default is 3. Use 1 or 0 to save massive VRAM)
 SH_DEGREE = 3
@@ -81,8 +86,12 @@ def ensure_directories():
     """
     os.makedirs(VANILLA_OUT_DIR, exist_ok=True)
     os.makedirs(SMDGS_OUT_DIR, exist_ok=True)
-    os.makedirs(OUR_METHOD_OUT_DIR, exist_ok=True)
     
+    os.makedirs(RUN_16_OUT_DIR, exist_ok=True)
+    os.makedirs(RUN_17_OUT_DIR, exist_ok=True)
+    os.makedirs(RUN_18_OUT_DIR, exist_ok=True)
+    os.makedirs(RUN_20_OUT_DIR, exist_ok=True)
+
     # Ensure COLMAP workspace directories exist
     os.makedirs(COLMAP_IMAGES_DIR, exist_ok=True)
     os.makedirs(COLMAP_SPARSE_DIR, exist_ok=True)

@@ -8,7 +8,8 @@ set -e
 # ==============================================================================
 SCENE=$(python -c "from project_config import SCENE_NAME; print(SCENE_NAME)")
 RESOLUTION=$(python -c "from project_config import RESOLUTION_SCALE; print(RESOLUTION_SCALE)")
-ITERATIONS=$(python -c "from project_config import TOTAL_ITERATIONS; print(TOTAL_ITERATIONS)")
+ITERATIONS=$(python -c "from project_config import REGULAR_ITERATIONS; print(REGULAR_ITERATIONS)")
+EX_A_ITERATIONS=$(python -c "from project_config import EXTENSION_A_ITERATIONS; print(EXTENSION_A_ITERATIONS)")
 VOXEL=$(python -c "from project_config import VOXEL_SIZE; print(VOXEL_SIZE)")
 
 # Pull the exact directory paths dynamically from our Python configuration!
@@ -16,9 +17,14 @@ SCENE_DIR=$(python -c "from project_config import SCENE_DIR; print(SCENE_DIR)")
 ORIGINAL_IMAGES_DIR=$(python -c "from project_config import ORIGINAL_IMAGES_DIR; print(ORIGINAL_IMAGES_DIR)")
 COLMAP_DIR=$(python -c "from project_config import COLMAP_DIR; print(COLMAP_DIR)")
 COLMAP_IMAGES_DIR=$(python -c "from project_config import COLMAP_IMAGES_DIR; print(COLMAP_IMAGES_DIR)")
+
 VANILLA_OUT=$(python -c "from project_config import VANILLA_OUT_DIR; print(VANILLA_OUT_DIR)")
 SMDGS_OUT=$(python -c "from project_config import SMDGS_OUT_DIR; print(SMDGS_OUT_DIR)")
-OUR_METHOD_OUT=$(python -c "from project_config import OUR_METHOD_OUT_DIR; print(OUR_METHOD_OUT_DIR)")
+
+RUN_16_OUT=$(python -c "from project_config import RUN_16_OUT_DIR; print(RUN_16_OUT_DIR)")
+RUN_17_OUT=$(python -c "from project_config import RUN_17_OUT_DIR; print(RUN_17_OUT_DIR)")
+RUN_18_OUT=$(python -c "from project_config import RUN_18_OUT_DIR; print(RUN_18_OUT_DIR)")
+RUN_20_OUT=$(python -c "from project_config import RUN_20_OUT_DIR; print(RUN_20_OUT_DIR)")
 
 echo "========================================================="
 echo "Starting Sparse-View Pipeline for scene: $SCENE"
@@ -86,27 +92,62 @@ python metrics.py \
     -m $SMDGS_OUT
 
 # ---------------------------------------------------------
-# Step 6: Train Our Proposed Model (Selective LPC loss)
+# Step 6: Ablation Study - Running Proposed Configurations
 # ---------------------------------------------------------
-echo -e "\n---> [Step 6/6] "
-echo -e "Starting Proposed Method (Selective LPC Hybrid Loss + some regularization) Training..."
+echo -e "\n---> [Step 6/6] Starting Ablation Study configurations..."
 
-# Execute the training script with the --use_lpc flag to activate our custom loss
+echo -e "\n---> [Run 16] Hybrid LPC + Empty Space + Dropout"
 python train.py \
     -s $SCENE_DIR \
     --resolution $RESOLUTION \
     --iterations $ITERATIONS \
-    --model_path $OUR_METHOD_OUT \
+    --model_path $RUN_16_OUT \
     --use_lpc
 
-# render and score the output
-python render.py \
-    -m $OUR_METHOD_OUT \
-    --voxel_size $VOXEL
+python render.py -m $RUN_16_OUT --voxel_size $VOXEL
+python metrics.py -m $RUN_16_OUT
 
-python metrics.py \
-    -m $OUR_METHOD_OUT
+echo -e "\n---> [Run 17] Hybrid LPC + Empty Space + GNS (3D Pruning, no Dropout)"
+python train.py \
+    -s $SCENE_DIR \
+    --resolution $RESOLUTION \
+    --iterations $ITERATIONS \
+    --model_path $RUN_17_OUT \
+    --use_lpc \
+    --use_gns
+
+python render.py -m $RUN_17_OUT --voxel_size $VOXEL
+python metrics.py -m $RUN_17_OUT
+
+echo -e "\n---> [Run 18] Hybrid LPC + Empty Space + GNS + Extension A (TV Loss)"
+python train.py \
+    -s $SCENE_DIR \
+    --resolution $RESOLUTION \
+    --iterations $EX_A_ITERATIONS \
+    --geom_prior_until_iter $EX_A_ITERATIONS \
+    --model_path $RUN_18_OUT \
+    --use_lpc \
+    --use_gns \
+    --use_extension_a \
+    --lambda_tv 0.1
+
+python render.py -m $RUN_18_OUT --voxel_size $VOXEL
+python metrics.py -m $RUN_18_OUT
+
+echo -e "\n---> [Run 20] Hybrid LPC + Empty Space + Dropout + Extension A (No GNS)"
+python train.py \
+    -s $SCENE_DIR \
+    --resolution $RESOLUTION \
+    --iterations $EX_A_ITERATIONS \
+    --geom_prior_until_iter $EX_A_ITERATIONS \
+    --model_path $RUN_20_OUT \
+    --use_lpc \
+    --use_extension_a \
+    --lambda_tv 0.1
+
+python render.py -m $RUN_20_OUT --voxel_size $VOXEL
+python metrics.py -m $RUN_20_OUT
 
 echo -e "\n========================================================="
-echo "Pipeline completed successfully!"
+echo "Pipeline and Ablation Study completed successfully!"
 echo "========================================================="

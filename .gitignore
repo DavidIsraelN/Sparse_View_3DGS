@@ -10,6 +10,7 @@ cuda-keyring_1.1-1_all.deb
 /output
 /Vanilla_3DGS/assets/*.gif
 /Vanilla_3DGS/git_beckup
+train_history.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

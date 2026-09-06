@@ -78,9 +78,10 @@ class ModelParams(ParamGroup):
         self.smooth = True
         self.warp = True
 
-        # --- ADDED: LPC Flag ---
-        # Determines whether to use the original SMDGS absolute alignment or our LPC
-        self.use_lpc = False
+        # --- RESEARCH ABLATION FLAGS ---
+        self.use_lpc = False         # Determines whether to use the original SMDGS absolute alignment or our Hybrid LPC
+        self.use_gns = False         # Determines whether to use the GNS method or not
+        self.use_extension_a = False # Determines whether to use the Extension A method or not
 
         super().__init__(parser, "Loading Parameters", sentinel)
 
@@ -126,12 +127,16 @@ class OptimizationParams(ParamGroup):
         # MODIFIED: lambda_2 is the coefficient of the Absolute Depth Loss (original SMDGS loss)
         # and was 1.0, this wheight not work well for and the Selective Gradient-Alignment Loss 
         # (our loss), so i try to change it to 50.0, 10.0 and 4.0 to give this loss more wheight.
-        # but all of these tries didn't succeed, the gradients fits but the depth was very wrong
+        # but all of these tries didn't succeed, the gradients fits but the depth was very wrong 
+        # so we moved from GAL to Hybrid LPC and we keep lambda_2 at 1.0
         self.lambda_2 = 1.0
         self.lambda_3 = 1.0
         self.lambda_4 = 0.015
         self.lambda_5 = 1.5
         self.lambda_6 = 0.1
+
+        # -- Extension A Parameters --
+        self.lambda_tv = 0.1  # Weight for Extension A (Pseudo-views TV Loss)
 
         super().__init__(parser, "Optimization Parameters")
 
